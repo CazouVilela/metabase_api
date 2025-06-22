@@ -1,71 +1,60 @@
-# Metabase Custom Dashboard IFrame
+# Metabase Customizações com Proxy Flask
 
-Este projeto demonstra como incorporar dados de uma pergunta do Metabase em um `iframe` dentro de um dashboard. Os scripts consultam a API do Metabase aplicando os filtros definidos no próprio dashboard.
+Este repositório contém uma aplicação Flask usada como proxy para renderização de componentes customizados do Metabase, como iframes interativos que recebem filtros do dashboard pai.
 
-## Estrutura de pastas
+## Estrutura do Projeto
 
 ```
 metabase_customizacoes/
 ├── api/
-│   ├── config.py        # Configurações de URL e token da API
-│   └── metabase_api.py  # Funções para consulta à API do Metabase
+│   ├── __init__.py
+│   ├── config.py               # Configurações como URL e credenciais do Metabase
+│   └── metabase_api.py         # Funções para consultar a API do Metabase
+│
 ├── proxy_server/
-│   ├── config.py        # Configurações do proxy (porta e caminhos)
-│   └── proxy_server.py  # Servidor Flask que serve o HTML e faz proxy das chamadas
-└── componentes/
-    └── dashboard tabela/
-        ├── dashboard-iframe.html  # HTML do iframe
-        ├── dashboard-iframe.js    # Lógica para ler filtros e consultar a API
-        └── dashboard-iframe.css   # Estilos do iframe
+│   ├── __init__.py
+│   ├── config.py               # Define portas e caminho de arquivos estáticos
+│   └── proxy_server.py         # Servidor Flask com endpoints de proxy
+│
+├── componentes/
+│   └── dashboard_tabela/       # Frontend HTML, CSS e JS para renderizar a tabela no iframe
+│       ├── dashboard-iframe.html
+│       ├── dashboard-iframe.css
+│       └── dashboard-iframe.js
+│
+├── README.md
+└── requirements.txt            # Dependências da aplicação (ex: Flask, requests)
 ```
 
-Há também um `requirements.txt` com as dependências Python.
+## Executando localmente
 
-## Configuração do ambiente (Fedora 41)
-
-1. **Instalar dependências Python**
+1. Crie um ambiente virtual e ative:
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
+```
+
+2. Instale as dependências:
+
+```bash
 pip install -r requirements.txt
 ```
 
-2. **Configurar o Nginx**
+3. Configure as credenciais do Metabase no arquivo `api/config.py`.
 
-Inclua as seguintes rotas adicionais no arquivo `/etc/nginx/conf.d/metabase.conf` para encaminhar as requisições para o proxy (porta 3500):
-
-```nginx
-location /componentes/ {
-    proxy_pass http://localhost:3500/componentes/;
-}
-
-location /proxy/ {
-    proxy_pass http://localhost:3500/;
-}
-```
-
-Recarregue o Nginx:
+4. Execute o servidor Flask:
 
 ```bash
-sudo systemctl reload nginx
+python proxy_server/proxy_server.py
 ```
 
-3. **Executar o proxy**
+## Endpoints disponíveis
 
-```bash
-cd metabase_customizacoes/proxy_server
-python proxy_server.py
-```
+- `/componentes/<arquivo>`: Serve arquivos HTML/JS/CSS do frontend.
+- `/query?question_id=<id>&filtro1=...`: Faz a consulta autenticada ao Metabase com os filtros fornecidos.
 
-O proxy servirá os arquivos HTML e encaminhará as consultas para a API do Metabase.
+## Finalidade
 
-4. **Incorporar o iframe no dashboard**
+Essa estrutura permite a criação de componentes visuais reutilizáveis no Metabase que suportam filtros dinâmicos, utilizando uma camada intermediária para comunicação com a API do Metabase.
 
-Adicione ao dashboard do Metabase um bloco de iframe apontando para:
-
-```html
-<iframe src="https://metabasedashboards.ngrok.io/componentes/dashboard tabela/dashboard-iframe.html?question_id=51" width="100%" height="800"></iframe>
-```
-
-O JavaScript do iframe irá ler periodicamente os filtros do dashboard e atualizar a consulta, exibindo a tabela resultante e informações de depuração.
