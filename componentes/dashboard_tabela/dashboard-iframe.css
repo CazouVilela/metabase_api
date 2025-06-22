@@ -6,3 +6,25 @@ pre {
     padding: 8px;
     border: 1px solid #ddd;
 }
+
+#filters-display {
+    background: #e3f2fd;
+    border: 1px solid #2196f3;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+.filter-item {
+    display: inline-block;
+    background: white;
+    padding: 3px 8px;
+    border-radius: 20px;
+    margin: 2px;
+    border: 1px solid #2196f3;
+    font-size: 12px;
+}
+
+.filter-item strong {
+    color: #1976d2;
+}

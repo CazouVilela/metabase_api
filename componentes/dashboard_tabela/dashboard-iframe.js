@@ -1,5 +1,7 @@
 const debugEl = document.getElementById('debug');
 const tableEl = document.getElementById('table-container');
+const filtersDisplayEl = document.getElementById('filters-display');
+const filtersListEl = document.getElementById('filters-list');
 
 const params = new URLSearchParams(window.location.search);
 const questionId = params.get('question_id') || '51';
@@ -45,6 +47,27 @@ function renderTable(data) {
     tableEl.innerHTML = html;
 }
 
+function renderFilters(filters) {
+    if (!filtersListEl) return;
+    filtersListEl.innerHTML = '';
+    Object.entries(filters).forEach(([key, value]) => {
+        const item = document.createElement('div');
+        item.className = 'filter-item';
+        const friendly = (window.filterMapping && window.filterMapping[key] && window.filterMapping[key].friendlyName) || key;
+        if (Array.isArray(value)) {
+            item.innerHTML = `<strong>${friendly}:</strong> ${value.length} selecionados`;
+        } else {
+            item.innerHTML = `<strong>${friendly}:</strong> ${value}`;
+        }
+        filtersListEl.appendChild(item);
+    });
+    if (Object.keys(filters).length === 0) {
+        filtersDisplayEl.style.display = 'none';
+    } else {
+        filtersDisplayEl.style.display = 'block';
+    }
+}
+
 async function update() {
     const filters = getFiltersFromDashboard();
     const filterString = JSON.stringify(filters);
@@ -53,6 +76,7 @@ async function update() {
         const { data, url, status } = await fetchData(filters);
         renderDebug(filters, url, status, data);
         renderTable(data);
+        renderFilters(filters);
     }
 }
 
