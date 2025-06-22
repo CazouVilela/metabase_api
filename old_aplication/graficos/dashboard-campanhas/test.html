@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Mapeamento Dinâmico</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            margin: 5px 0;
+        }
+
+        .success {
+            background: #4caf50;
+            color: white;
+        }
+
+        .error {
+            background: #f44336;
+            color: white;
+        }
+
+        .warning {
+            background: #ff9800;
+            color: white;
+        }
+
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+            button:hover {
+                background: #1976d2;
+            }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste de Mapeamento Dinâmico de Filtros</h1>
+
+    <div class="test-section">
+        <h2>1. Simular Configuração</h2>
+        <button onclick="testDefaultConfig()">Testar Config Padrão</button>
+        <button onclick="testCustomConfig()">Testar Config Customizada</button>
+        <div id="configResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Simular Captura de Filtros</h2>
+        <button onclick="simulateFilterCapture()">Simular Captura pelo Nome</button>
+        <div id="captureResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Validar Mapeamento no Dashboard Real</h2>
+        <button onclick="validateRealDashboard()">Validar no Dashboard</button>
+        <div id="validationResult"></div>
+    </div>
+
+    <script>
+        // Simular configuração padrão
+        function testDefaultConfig() {
+            const defaultFilterMapping = {
+                'data': {
+                    metabaseParam: 'data',
+                    friendlyName: 'Data',
+                    type: 'date'
+                },
+                'conta': {
+                    metabaseParam: 'conta',
+                    friendlyName: 'Conta',
+                    type: 'string'
+                },
+                'campanha': {
+                    metabaseParam: 'campanha',
+                    friendlyName: 'Campanha',
+                    type: 'string'
+                },
+                'adset': {
+                    metabaseParam: 'adset',
+                    friendlyName: 'Conjunto de Anúncios',
+                    type: 'string'
+                },
+                'anuncio': {
+                    metabaseParam: 'ad_name',
+                    friendlyName: 'Anúncio',
+                    type: 'string'
+                },
+                'device': {
+                    metabaseParam: 'device',
+                    friendlyName: 'Dispositivo',
+                    type: 'string'
+                },
+                'plataforma': {
+                    metabaseParam: 'plataforma',
+                    friendlyName: 'Plataforma',
+                    type: 'string'
+                },
+                'posicao': {
+                    metabaseParam: 'posicao',
+                    friendlyName: 'Posição',
+                    type: 'string'
+                },
+                'objetivo': {
+                    metabaseParam: 'objective',
+                    friendlyName: 'Objetivo',
+                    type: 'string'
+                },
+                'buying_type': {
+                    metabaseParam: 'buying_type',
+                    friendlyName: 'Tipo de Compra',
+                    type: 'string'
+                },
+                'optimization_goal': {
+                    metabaseParam: 'optimization_goal',
+                    friendlyName: 'Meta de Otimização',
+                    type: 'string'
+                },
+                'conversoes_consideradas': {
+                    metabaseParam: 'action_type_filter',
+                    friendlyName: 'Conversões Consideradas',
+                    type: 'string'
+                }
+            };
+
+            displayConfig(defaultFilterMapping, 'Configuração Padrão');
+        }
+
+        // Simular configuração customizada
+        function testCustomConfig() {
+            const customConfig = {
+                'data': { metabaseParam: 'data', friendlyName: 'Data', type: 'date' },
+                'conta': { metabaseParam: 'conta', friendlyName: 'Conta', type: 'string' },
+                'campanha': { metabaseParam: 'campanha', friendlyName: 'Campanha', type: 'string' },
+                'adset': { metabaseParam: 'adset', friendlyName: 'Conjunto de Anúncios', type: 'string' },
+                'peca': { metabaseParam: 'ad_name', friendlyName: 'Peça', type: 'string' }, // Mudou!
+                'device': { metabaseParam: 'device', friendlyName: 'Device', type: 'string' }, // Mudou!
+                'plataforma': { metabaseParam: 'plataforma', friendlyName: 'Plataforma', type: 'string' },
+                'posicao': { metabaseParam: 'posicao', friendlyName: 'Posição', type: 'string' },
+                'objetivo': { metabaseParam: 'objective', friendlyName: 'Objetivo', type: 'string' },
+                'tipo_de_compra': { metabaseParam: 'buying_type', friendlyName: 'Buying type', type: 'string' }, // Mudou!
+                'meta_otimizacao': { metabaseParam: 'optimization_goal', friendlyName: 'Optimization goal', type: 'string' }, // Mudou!
+                'conversoes': { metabaseParam: 'action_type_filter', friendlyName: 'Conversões consideradas', type: 'string' } // Mudou!
+            };
+
+            displayConfig(customConfig, 'Configuração Customizada (simulando labels do dashboard com "Peça")');
+        }
+
+        // Exibir configuração
+        function displayConfig(config, title) {
+            let html = `<h3>${title}</h3>`;
+            html += '<table>';
+            html += '<tr><th>Campo (Chave)</th><th>Parâmetro API</th><th>Nome Amigável</th><th>Tipo</th></tr>';
+
+            Object.entries(config).forEach(([field, settings]) => {
+                html += `<tr>`;
+                html += `<td><code>${field}</code></td>`;
+                html += `<td><code>${settings.metabaseParam}</code></td>`;
+                html += `<td>${settings.friendlyName}</td>`;
+                html += `<td>${settings.type}</td>`;
+                html += `</tr>`;
+            });
+
+            html += '</table>';
+            document.getElementById('configResult').innerHTML = html;
+        }
+
+        // Simular captura de filtros por nome
+        function simulateFilterCapture() {
+            // Simular labels encontrados no dashboard
+            const dashboardLabels = [
+                { label: 'Data', value: 'Últimos 7 dias' },
+                { label: 'Conta', value: 'Conta ABC' },
+                { label: 'Campanha', value: 'Black Friday 2024' },
+                { label: 'Conjunto de anúncios', value: 'Tudo' },
+                { label: 'Peça', value: 'Banner Principal' },  // Com ç
+                { label: 'Device', value: 'Mobile' },
+                { label: 'Plataforma', value: 'Facebook' },
+                { label: 'Posição', value: 'Feed' },
+                { label: 'Objetivo', value: 'Conversões' },
+                { label: 'Buying type', value: 'Auction' },
+                { label: 'Optimization goal', value: 'Conversions' },
+                { label: 'Conversões consideradas', value: 'Purchase' }
+            ];
+
+            // Configuração para teste
+            const filterMapping = {
+                'data': { metabaseParam: 'data', friendlyName: 'Data' },
+                'conta': { metabaseParam: 'conta', friendlyName: 'Conta' },
+                'campanha': { metabaseParam: 'campanha', friendlyName: 'Campanha' },
+                'adset': { metabaseParam: 'adset', friendlyName: 'Conjunto de anúncios' },
+                'anuncio': { metabaseParam: 'ad_name', friendlyName: 'Anúncio' },
+                'peca': { metabaseParam: 'ad_name', friendlyName: 'Peça' }, // Adicionar variante
+                'device': { metabaseParam: 'device', friendlyName: 'Device' },
+                'plataforma': { metabaseParam: 'plataforma', friendlyName: 'Plataforma' },
+                'posicao': { metabaseParam: 'posicao', friendlyName: 'Posição' },
+                'objetivo': { metabaseParam: 'objective', friendlyName: 'Objetivo' },
+                'buying_type': { metabaseParam: 'buying_type', friendlyName: 'Buying type' },
+                'optimization_goal': { metabaseParam: 'optimization_goal', friendlyName: 'Optimization goal' },
+                'conversoes_consideradas': { metabaseParam: 'action_type_filter', friendlyName: 'Conversões consideradas' }
+            };
+
+            // Simular processo de captura
+            const capturedFilters = {};
+            let html = '<h3>Simulação de Captura por Nome</h3>';
+            html += '<table>';
+            html += '<tr><th>Label no Dashboard</th><th>Campo Mapeado</th><th>Parâmetro API</th><th>Valor</th><th>Status</th></tr>';
+
+            dashboardLabels.forEach(({ label, value }) => {
+                const labelLower = label.toLowerCase();
+                let matchedField = null;
+
+                // Buscar correspondência
+                for (const [field, config] of Object.entries(filterMapping)) {
+                    if (config.friendlyName.toLowerCase() === labelLower) {
+                        matchedField = field;
+                        break;
+                    }
+                }
+
+                if (matchedField && value !== 'Tudo') {
+                    const param = filterMapping[matchedField].metabaseParam;
+                    capturedFilters[matchedField] = value;
+
+                    html += `<tr>`;
+                    html += `<td>${label}</td>`;
+                    html += `<td><code>${matchedField}</code></td>`;
+                    html += `<td><code>${param}</code></td>`;
+                    html += `<td>${value}</td>`;
+                    html += `<td class="success">✅ Capturado</td>`;
+                    html += `</tr>`;
+                } else if (!matchedField) {
+                    html += `<tr>`;
+                    html += `<td>${label}</td>`;
+                    html += `<td>-</td>`;
+                    html += `<td>-</td>`;
+                    html += `<td>${value}</td>`;
+                    html += `<td class="error">❌ Não mapeado</td>`;
+                    html += `</tr>`;
+                } else {
+                    html += `<tr>`;
+                    html += `<td>${label}</td>`;
+                    html += `<td><code>${matchedField}</code></td>`;
+                    html += `<td>-</td>`;
+                    html += `<td>${value}</td>`;
+                    html += `<td class="warning">⚠️ Ignorado (placeholder)</td>`;
+                    html += `</tr>`;
+                }
+            });
+
+            html += '</table>';
+            html += '<h4>Filtros Capturados:</h4>';
+            html += '<pre>' + JSON.stringify(capturedFilters, null, 2) + '</pre>';
+
+            document.getElementById('captureResult').innerHTML = html;
+        }
+
+        // Validar no dashboard real
+        function validateRealDashboard() {
+            if (window.parent === window) {
+                document.getElementById('validationResult').innerHTML =
+                    '<div class="status error">❌ Execute este teste dentro do iframe no dashboard do Metabase</div>';
+                return;
+            }
+
+            try {
+                const containers = window.parent.document.querySelectorAll('.Parameter');
+                let html = '<h3>Filtros Encontrados no Dashboard Real</h3>';
+                html += '<table>';
+                html += '<tr><th>Label</th><th>Valor Atual</th><th>Seletor do Container</th></tr>';
+
+                containers.forEach((container, index) => {
+                    const label = container.querySelector('label, .Parameter-name')?.textContent?.trim() || 'N/A';
+                    const widget = container.querySelector('[data-testid*="parameter-value-widget"], input, [role="button"]');
+                    const value = widget?.textContent?.trim() || widget?.value || 'N/A';
+
+                    html += `<tr>`;
+                    html += `<td>${label}</td>`;
+                    html += `<td>${value}</td>`;
+                    html += `<td><code>.Parameter:nth-child(${index + 1})</code></td>`;
+                    html += `</tr>`;
+                });
+
+                html += '</table>';
+                html += `<p>Total de filtros: ${containers.length}</p>`;
+
+                document.getElementById('validationResult').innerHTML = html;
+
+            } catch (error) {
+                document.getElementById('validationResult').innerHTML =
+                    `<div class="status error">❌ Erro: ${error.message}</div>`;
+            }
+        }
+
+        // Executar teste padrão ao carregar
+        window.addEventListener('DOMContentLoaded', () => {
+            testDefaultConfig();
+        });
+    </script>
+</body>
+</html>

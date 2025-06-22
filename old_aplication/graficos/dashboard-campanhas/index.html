@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Campanhas - Tabela de Dados - 2</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+
+        .container {
+            max-width: 100%;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+            .header h1 {
+                margin: 0;
+                font-size: 24px;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }
+
+        .row-counter {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status-bar {
+            background: #f0f0f0;
+            padding: 12px 20px;
+            font-size: 14px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+            .status-bar.connected {
+                background: #e8f5e9;
+                color: #2e7d32;
+            }
+
+        .content {
+            padding: 20px;
+        }
+
+        .debug-section {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+            .debug-section h3 {
+                margin-top: 0;
+                color: #666;
+            }
+
+        .debug-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+            .debug-buttons button {
+                background: #2196f3;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+            }
+
+                .debug-buttons button:hover {
+                    background: #1976d2;
+                }
+
+        .debug-output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .filters-display {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+            .filters-display h3 {
+                margin-top: 0;
+                color: #1976d2;
+            }
+
+        .filter-item {
+            display: inline-block;
+            background: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            margin: 5px;
+            border: 1px solid #2196f3;
+            font-size: 14px;
+        }
+
+            .filter-item strong {
+                color: #1976d2;
+            }
+
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin-top: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th {
+            background: #f5f5f5;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Classes para tipos de células */
+        .cell-number {
+            text-align: right;
+        }
+
+        .cell-currency {
+            text-align: right;
+            color: #2e7d32;
+            font-weight: 500;
+        }
+
+        .cell-percentage {
+            text-align: right;
+        }
+
+        .cell-date {
+            white-space: nowrap;
+        }
+
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Toggle para debug */
+        .debug-toggle {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .debug-section.collapsed {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                📊 Dashboard de Campanhas - Tabela de Dados
+                <span id="rowCounter" class="row-counter" style="display: none;">0 linhas</span>
+            </h1>
+        </div>
+
+        <div id="statusBar" class="status-bar">
+            <span id="statusText">🔄 Conectando...</span>
+            <button class="debug-toggle" onclick="toggleDebug()">🐛 Debug</button>
+        </div>
+
+        <div class="content">
+            <!-- Debug Section -->
+            <div id="debugSection" class="debug-section collapsed">
+                <h3>🐛 Debug e Testes</h3>
+                <div class="debug-buttons">
+                    <button onclick="testConnection()">Testar Conexão</button>
+                    <button onclick="captureFiltersManually()">Capturar Filtros</button>
+                    <button onclick="testWithSampleFilters()">Testar com Filtros Exemplo</button>
+                    <button onclick="showCurrentState()">Mostrar Estado Atual</button>
+                    <button onclick="analyzeDOM()">Analisar DOM Metabase</button>
+                    <button onclick="clearDebug()">Limpar Debug</button>
+                </div>
+                <div id="debugOutput" class="debug-output"></div>
+            </div>
+
+            <!-- Filtros -->
+            <div id="filtersDisplay" class="filters-display hidden">
+                <h3>🔍 Filtros Aplicados</h3>
+                <div id="filtersList"></div>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>Aguardando filtros do dashboard...</p>
+                <p style="font-size: 12px; color: #999;">Selecione filtros no dashboard para carregar os dados</p>
+            </div>
+
+            <!-- Error -->
+            <div id="error" class="error hidden"></div>
+
+            <!-- Tabela -->
+            <div id="tableContainer" class="table-container hidden">
+                <table>
+                    <thead id="tableHeader"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static-api/api_config.js"></script>
+    <script src="/static-api/metabase-api.js"></script>
+
+    <script>
+        // Estado global
+        const state = {
+            api: null,
+            currentFilters: {},
+            isInIframe: window.parent !== window,
+            data: null,
+            debugEnabled: false,
+            lastUpdateTime: null
+        };
+
+        // Toggle debug
+        function toggleDebug() {
+            state.debugEnabled = !state.debugEnabled;
+            const debugSection = document.getElementById('debugSection');
+            if (state.debugEnabled) {
+                debugSection.classList.remove('collapsed');
+            } else {
+                debugSection.classList.add('collapsed');
+            }
+        }
+
+        // Função de debug
+        function debug(message, data = null) {
+            if (!state.debugEnabled) return;
+
+            const output = document.getElementById('debugOutput');
+            const timestamp = new Date().toLocaleTimeString('pt-BR');
+            let logMessage = `[${timestamp}] ${message}`;
+
+            if (data) {
+                logMessage += '\n' + JSON.stringify(data, null, 2);
+            }
+
+            output.textContent = logMessage + '\n\n' + output.textContent;
+
+            // Limitar tamanho do log
+            const lines = output.textContent.split('\n');
+            if (lines.length > 100) {
+                output.textContent = lines.slice(0, 100).join('\n');
+            }
+
+            console.log(message, data);
+        }
+
+        // Limpar debug
+        function clearDebug() {
+            document.getElementById('debugOutput').textContent = '';
+        }
+
+        // Atualizar status
+        function updateStatus(message, isConnected = false) {
+            const statusText = document.getElementById('statusText');
+            const statusBar = document.getElementById('statusBar');
+
+            // Adicionar timestamp se conectado
+            if (isConnected && state.lastUpdateTime) {
+                const time = state.lastUpdateTime.toLocaleTimeString('pt-BR');
+                message += ` (atualizado às ${time})`;
+            }
+
+            statusText.textContent = message;
+            statusBar.className = isConnected ? 'status-bar connected' : 'status-bar';
+        }
+
+        // Mostrar erro
+        function showError(message) {
+            const errorEl = document.getElementById('error');
+            errorEl.textContent = message;
+            errorEl.classList.remove('hidden');
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('tableContainer').classList.add('hidden');
+            debug('ERRO: ' + message);
+        }
+
+        // Esconder erro
+        function hideError() {
+            document.getElementById('error').classList.add('hidden');
+        }
+
+        // Testar conexão
+        async function testConnection() {
+            debug('Testando conexão com proxy...');
+
+            try {
+                const response = await fetch(`${window.CONFIG.proxyUrl}/test`);
+                const data = await response.json();
+                debug('Conexão OK!', data);
+                updateStatus('✅ Proxy conectado', true);
+            } catch (error) {
+                debug('Erro de conexão', error.message);
+                showError('Erro ao conectar com o proxy: ' + error.message);
+            }
+        }
+
+        // Capturar filtros manualmente
+        function captureFiltersManually() {
+            if (!state.isInIframe) {
+                debug('Não está em iframe, não é possível capturar filtros');
+                return;
+            }
+
+            debug('Tentando capturar filtros manualmente...');
+
+            try {
+                // Forçar captura
+                if (state.api) {
+                    state.api.captureFiltersFromParent();
+
+                    // Verificar se capturou algo
+                    setTimeout(() => {
+                        const capturedFilters = state.api.capturedFilters;
+                        if (Object.keys(capturedFilters).length > 0) {
+                            debug('Filtros capturados manualmente:', capturedFilters);
+                            applyFilters(capturedFilters);
+                        } else {
+                            debug('Nenhum filtro foi capturado');
+                        }
+                    }, 500);
+                }
+            } catch (error) {
+                debug('Erro ao capturar filtros', error.message);
+            }
+        }
+
+        // Analisar DOM do Metabase
+        function analyzeDOM() {
+            if (!state.isInIframe) {
+                debug('Não está em iframe');
+                return;
+            }
+
+            debug('Analisando DOM do Metabase...');
+
+            try {
+                const parentDoc = window.parent.document;
+
+                // Buscar fieldsets
+                const fieldsets = parentDoc.querySelectorAll('fieldset');
+                debug(`Encontrados ${fieldsets.length} fieldsets`);
+
+                fieldsets.forEach((fieldset, index) => {
+                    const legend = fieldset.querySelector('legend');
+                    const button = fieldset.querySelector('button, [role="button"]');
+
+                    if (legend && button) {
+                        debug(`Fieldset ${index}: ${legend.textContent} = ${button.textContent}`);
+                    }
+                });
+
+            } catch (error) {
+                debug('Erro ao analisar DOM', error.message);
+            }
+        }
+
+        // Testar com filtros de exemplo
+        function testWithSampleFilters() {
+            const sampleFilters = {
+                data: 'past7days'
+            };
+
+            debug('Aplicando filtros de exemplo:', sampleFilters);
+            applyFilters(sampleFilters);
+        }
+
+        // Mostrar estado atual
+        function showCurrentState() {
+            const stateInfo = {
+                isInIframe: state.isInIframe,
+                currentFilters: state.currentFilters,
+                hasData: !!state.data,
+                rowCount: state.data?.length || 0,
+                apiConnected: !!state.api
+            };
+
+            debug('Estado atual:', stateInfo);
+        }
+
+        // Aplicar filtros e buscar dados
+        async function applyFilters(filters) {
+            state.currentFilters = filters;
+
+            // Mostrar filtros
+            displayFilters(filters);
+
+            // Buscar dados
+            await fetchData(filters);
+        }
+
+        // Exibir filtros
+        function displayFilters(filters) {
+            const filtersDisplay = document.getElementById('filtersDisplay');
+            const filtersList = document.getElementById('filtersList');
+
+            filtersList.innerHTML = '';
+
+            Object.entries(filters).forEach(([key, value]) => {
+                const filterItem = document.createElement('div');
+                filterItem.className = 'filter-item';
+
+                // Obter nome amigável
+                const friendlyName = window.filterMapping[key]?.friendlyName || key;
+
+                if (Array.isArray(value)) {
+                    filterItem.innerHTML = `<strong>${friendlyName}:</strong> ${value.length} selecionados`;
+                } else {
+                    filterItem.innerHTML = `<strong>${friendlyName}:</strong> ${value}`;
+                }
+
+                filtersList.appendChild(filterItem);
+            });
+
+            filtersDisplay.classList.remove('hidden');
+        }
+
+        // Buscar dados
+        async function fetchData(filters) {
+            debug('Buscando dados com filtros:', filters);
+            updateStatus('🔄 Buscando dados...', false);
+
+            // Esconder erro anterior se houver
+            hideError();
+
+            try {
+                const result = await state.api.getFilteredData(
+                    window.CONFIG.defaultQuestionId,
+                    filters
+                );
+
+                debug(`Dados recebidos: ${result.metadata.rows} linhas`);
+
+                state.data = result.formatted;
+                state.lastUpdateTime = new Date();
+
+                createTable(result.formatted, result.metadata.columns);
+
+                updateStatus(`✅ ${result.metadata.rows} linhas carregadas`, true);
+
+                // Atualizar contador de linhas no header
+                updateRowCounter(result.metadata.rows);
+
+            } catch (error) {
+                debug('Erro ao buscar dados', error);
+                showError('Erro ao buscar dados: ' + error.message);
+            }
+        }
+
+        // Atualizar contador de linhas
+        function updateRowCounter(count) {
+            const rowCounter = document.getElementById('rowCounter');
+            rowCounter.textContent = `${count.toLocaleString('pt-BR')} linhas`;
+            rowCounter.style.display = 'inline-block';
+        }
+
+        // Criar tabela
+        function createTable(data, columns) {
+            const tableHeader = document.getElementById('tableHeader');
+            const tableBody = document.getElementById('tableBody');
+
+            // Limpar tabela
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (!data || data.length === 0) {
+                showError('Nenhum dado encontrado para os filtros aplicados');
+                return;
+            }
+
+            // Criar header
+            const headerRow = document.createElement('tr');
+            columns.forEach(col => {
+                const th = document.createElement('th');
+                th.textContent = col.display_name || col.name;
+                headerRow.appendChild(th);
+            });
+            tableHeader.appendChild(headerRow);
+
+            // Criar linhas
+            data.forEach((row, index) => {
+                const tr = document.createElement('tr');
+
+                columns.forEach(col => {
+                    const td = document.createElement('td');
+                    const columnName = col.display_name || col.name;
+                    const value = row[columnName];
+
+                    // Formatar valor
+                    td.textContent = formatValue(value, columnName, col.base_type);
+                    td.className = getCellClass(columnName, col.base_type);
+
+                    tr.appendChild(td);
+                });
+
+                tableBody.appendChild(tr);
+            });
+
+            // Mostrar tabela
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('tableContainer').classList.remove('hidden');
+        }
+
+        // Formatar valor
+        function formatValue(value, columnName, baseType) {
+            if (value === null || value === undefined) return '-';
+
+            const colLower = columnName.toLowerCase();
+
+            // Moeda
+            if (colLower.includes('spend') || colLower.includes('cost') ||
+                colLower.includes('cpc') || colLower.includes('cpm') ||
+                colLower.includes('cpconv') || colLower.includes('revenue')) {
+                return new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(value);
+            }
+
+            // Porcentagem
+            if (colLower.includes('ctr') || colLower.includes('rate') ||
+                colLower.includes('convrate')) {
+                return value.toFixed(2) + '%';
+            }
+
+            // Frequência
+            if (colLower === 'frequency') {
+                return value.toFixed(2);
+            }
+
+            // Número inteiro
+            if ((colLower.includes('impressions') || colLower.includes('clicks') ||
+                colLower.includes('reach') || colLower.includes('conversions')) &&
+                typeof value === 'number') {
+                return new Intl.NumberFormat('pt-BR').format(Math.round(value));
+            }
+
+            // Número decimal
+            if (typeof value === 'number') {
+                return new Intl.NumberFormat('pt-BR', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                }).format(value);
+            }
+
+            // Data
+            if (baseType === 'type/Date' || colLower.includes('date') || colLower.includes('data')) {
+                if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    const date = new Date(value + 'T00:00:00');
+                    return date.toLocaleDateString('pt-BR');
+                }
+            }
+
+            // JSON (para o campo conversions_json)
+            if (baseType === 'type/JSON' && typeof value === 'object') {
+                return JSON.stringify(value);
+            }
+
+            return value;
+        }
+
+        // Obter classe da célula
+        function getCellClass(columnName, baseType) {
+            const colLower = columnName.toLowerCase();
+
+            if (colLower.includes('spend') || colLower.includes('cost') ||
+                colLower.includes('cpc') || colLower.includes('cpm') ||
+                colLower.includes('cpconv') || colLower.includes('revenue')) {
+                return 'cell-currency';
+            }
+
+            if (colLower.includes('ctr') || colLower.includes('rate')) {
+                return 'cell-percentage';
+            }
+
+            if (baseType === 'type/Date' || colLower.includes('date') || colLower.includes('data')) {
+                return 'cell-date';
+            }
+
+            if (baseType === 'type/Number' || baseType === 'type/Integer' || baseType === 'type/Decimal') {
+                return 'cell-number';
+            }
+
+            return '';
+        }
+
+        // Inicializar
+        async function initialize() {
+            debug('Inicializando dashboard...');
+            debug('Ambiente:', {
+                isInIframe: state.isInIframe,
+                proxyUrl: window.CONFIG?.proxyUrl,
+                questionId: window.CONFIG?.defaultQuestionId
+            });
+
+            try {
+                // Criar API
+                state.api = new MetabaseAPI();
+                debug('API criada');
+
+                // Se está em iframe, configurar monitoramento
+                if (state.isInIframe) {
+                    // Registrar callback para mudanças de filtros
+                    state.api.onFilterChange((filters) => {
+                        debug('Filtros mudaram:', filters);
+
+                        // Só aplicar se houver filtros
+                        if (Object.keys(filters).length > 0) {
+                            applyFilters(filters);
+                        }
+                    });
+
+                    // Iniciar monitoramento
+                    state.api.startFilterMonitoring();
+                    debug('Monitoramento de filtros iniciado');
+
+                    updateStatus('👁️ Aguardando seleção de filtros...', false);
+
+                    // Tentar captura inicial após 2s
+                    setTimeout(() => {
+                        debug('Tentando captura inicial...');
+                        captureFiltersManually();
+                    }, 2000);
+
+                } else {
+                    debug('Modo standalone - use os botões de teste');
+                    updateStatus('⚠️ Modo standalone - use os botões de teste', false);
+                    document.getElementById('loading').innerHTML = `
+                            <p>⚠️ Esta página deve ser usada dentro de um iframe no Metabase</p>
+                            <p>Use os botões de debug para testar</p>
+                        `;
+                }
+
+                // Testar conexão inicial
+                await testConnection();
+
+            } catch (error) {
+                debug('Erro na inicialização', error);
+                showError('Erro ao inicializar: ' + error.message);
+            }
+        }
+
+        // Iniciar quando carregar
+        window.addEventListener('DOMContentLoaded', initialize);
+
+        // Cleanup ao sair
+        window.addEventListener('beforeunload', () => {
+            if (state.api) {
+                state.api.cleanup();
+            }
+        });
+    </script>
+</body>
+</html>

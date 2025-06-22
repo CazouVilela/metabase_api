@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug de Filtros - Metabase</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #569cd6;
+            border-bottom: 2px solid #569cd6;
+            padding-bottom: 10px;
+        }
+
+        .section {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .section h2 {
+            color: #4ec9b0;
+            margin-top: 0;
+        }
+
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #1177bb;
+        }
+
+        .output {
+            background: #1e1e1e;
+            border: 1px solid #464647;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .warning { color: #dcdcaa; }
+        .info { color: #9cdcfe; }
+        .key { color: #569cd6; }
+        .string { color: #ce9178; }
+        .number { color: #b5cea8; }
+
+        .filter-item {
+            background: #2d2d30;
+            border: 1px solid #464647;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+
+        .strategy {
+            margin: 10px 0;
+            padding: 10px;
+            background: #2d2d30;
+            border-left: 3px solid #569cd6;
+        }
+
+        #liveCapture {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #2d2d30;
+            border: 2px solid #569cd6;
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
+        }
+
+        .pulse {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #4ec9b0;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug Avançado de Filtros - Metabase</h1>
+
+        <!-- Status -->
+        <div class="section">
+            <h2>📊 Status</h2>
+            <div id="status" class="output"></div>
+        </div>
+
+        <!-- Estratégias de Captura -->
+        <div class="section">
+            <h2>🎯 Estratégias de Captura</h2>
+            <button onclick="runAllStrategies()">Executar Todas as Estratégias</button>
+            <button onclick="runStrategy1()">Estratégia 1: Data-TestId</button>
+            <button onclick="runStrategy2()">Estratégia 2: Classes</button>
+            <button onclick="runStrategy3()">Estratégia 3: Fieldsets</button>
+            <button onclick="runStrategy4()">Estratégia 4: Texto</button>
+            <button onclick="runStrategy5()">Estratégia 5: React Props</button>
+            <div id="strategies" class="output"></div>
+        </div>
+
+        <!-- Análise DOM -->
+        <div class="section">
+            <h2>🏗️ Análise do DOM</h2>
+            <button onclick="analyzeDOMStructure()">Analisar Estrutura</button>
+            <button onclick="findFilterElements()">Buscar Elementos de Filtro</button>
+            <button onclick="extractAllText()">Extrair Todo Texto</button>
+            <div id="domAnalysis" class="output"></div>
+        </div>
+
+        <!-- Teste de Mapeamento -->
+        <div class="section">
+            <h2>🗺️ Teste de Mapeamento</h2>
+            <button onclick="testMapping()">Testar Mapeamento</button>
+            <button onclick="validateFilterNames()">Validar Nomes de Filtros</button>
+            <div id="mapping" class="output"></div>
+        </div>
+
+        <!-- Filtros Capturados -->
+        <div class="section">
+            <h2>📋 Filtros Capturados</h2>
+            <button onclick="showCapturedFilters()">Mostrar Filtros</button>
+            <button onclick="simulateFilterApplication()">Simular Aplicação</button>
+            <div id="capturedFilters" class="output"></div>
+        </div>
+
+        <!-- Live Capture -->
+        <div id="liveCapture">
+            <h3>🔴 Captura Ao Vivo <span class="pulse"></span></h3>
+            <div id="liveOutput" style="font-size: 12px;"></div>
+        </div>
+    </div>
+
+    <script src="/static-api/api_config.js"></script>
+    <script src="/static-api/metabase-api.js"></script>
+
+    <script>
+        const debugState = {
+            isInIframe: window.parent !== window,
+            capturedFilters: {},
+            strategies: []
+        };
+
+        // Atualizar status
+        function updateStatus() {
+            const statusEl = document.getElementById('status');
+            const status = {
+                isInIframe: debugState.isInIframe,
+                configLoaded: !!window.CONFIG,
+                apiAvailable: !!window.MetabaseAPI,
+                filterMapping: Object.keys(window.filterMapping || {}).length,
+                timestamp: new Date().toLocaleString('pt-BR')
+            };
+
+            statusEl.innerHTML = `
+<span class="info">Ambiente:</span>
+  Em iframe: <span class="${status.isInIframe ? 'success' : 'warning'}">${status.isInIframe}</span>
+  Config carregada: <span class="${status.configLoaded ? 'success' : 'error'}">${status.configLoaded}</span>
+  API disponível: <span class="${status.apiAvailable ? 'success' : 'error'}">${status.apiAvailable}</span>
+  Mapeamentos: <span class="number">${status.filterMapping}</span>
+  Última atualização: <span class="string">${status.timestamp}</span>
+            `;
+        }
+
+        // Log formatado
+        function log(elementId, message, data = null, type = 'info') {
+            const el = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString('pt-BR');
+            
+            let content = `<span class="string">[${timestamp}]</span> <span class="${type}">${message}</span>`;
+            
+            if (data) {
+                content += '\n' + formatJSON(data);
+            }
+            
+            el.innerHTML = content + '\n\n' + el.innerHTML;
+        }
+
+        // Formatar JSON com cores
+        function formatJSON(obj) {
+            const json = JSON.stringify(obj, null, 2);
+            return json
+                .replace(/"([^"]+)":/g, '<span class="key">"$1"</span>:')
+                .replace(/: "([^"]+)"/g, ': <span class="string">"$1"</span>')
+                .replace(/: (\d+)/g, ': <span class="number">$1</span>')
+                .replace(/: (true|false)/g, ': <span class="key">$1</span>');
+        }
+
+        // Estratégia 1: Data-TestId
+        function runStrategy1() {
+            if (!debugState.isInIframe) {
+                log('strategies', 'Não está em iframe', null, 'error');
+                return;
+            }
+
+            log('strategies', 'Estratégia 1: Buscando por data-testid...', null, 'info');
+
+            try {
+                const parentDoc = window.parent.document;
+                const elements = parentDoc.querySelectorAll('[data-testid*="parameter"]');
+                
+                const results = [];
+                elements.forEach(el => {
+                    results.push({
+                        testId: el.getAttribute('data-testid'),
+                        tagName: el.tagName,
+                        className: el.className,
+                        text: el.textContent?.trim().substring(0, 100)
+                    });
+                });
+
+                log('strategies', `Encontrados ${results.length} elementos`, results, 'success');
+                debugState.strategies.push({ name: 'data-testid', results });
+
+            } catch (error) {
+                log('strategies', 'Erro na estratégia 1', error.message, 'error');
+            }
+        }
+
+        // Estratégia 2: Classes
+        function runStrategy2() {
+            if (!debugState.isInIframe) return;
+
+            log('strategies', 'Estratégia 2: Buscando por classes...', null, 'info');
+
+            try {
+                const parentDoc = window.parent.document;
+                const selectors = ['.Parameter', '.Field', '[class*="parameter"]', '[class*="filter"]'];
+                const results = [];
+
+                selectors.forEach(selector => {
+                    const elements = parentDoc.querySelectorAll(selector);
+                    elements.forEach(el => {
+                        results.push({
+                            selector: selector,
+                            className: el.className,
+                            id: el.id,
+                            label: el.querySelector('label')?.textContent?.trim(),
+                            value: el.querySelector('input, button, [role="button"]')?.textContent?.trim()
+                        });
+                    });
+                });
+
+                log('strategies', `Encontrados ${results.length} elementos por classes`, results, 'success');
+                debugState.strategies.push({ name: 'classes', results });
+
+            } catch (error) {
+                log('strategies', 'Erro na estratégia 2', error.message, 'error');
+            }
+        }
+
+        // Estratégia 3: Fieldsets
+        function runStrategy3() {
+            if (!debugState.isInIframe) return;
+
+            log('strategies', 'Estratégia 3: Buscando fieldsets...', null, 'info');
+
+            try {
+                const parentDoc = window.parent.document;
+                const fieldsets = parentDoc.querySelectorAll('fieldset');
+                const results = [];
+
+                fieldsets.forEach((fieldset, index) => {
+                    const legend = fieldset.querySelector('legend');
+                    const button = fieldset.querySelector('button, [role="button"]');
+                    const input = fieldset.querySelector('input');
+
+                    results.push({
+                        index: index,
+                        hasLegend: !!legend,
+                        legendText: legend?.textContent?.trim(),
+                        hasButton: !!button,
+                        buttonText: button?.textContent?.trim(),
+                        hasInput: !!input,
+                        inputValue: input?.value,
+                        className: fieldset.className
+                    });
+                });
+
+                log('strategies', `Encontrados ${results.length} fieldsets`, results, 'success');
+                
+                // Tentar extrair filtros
+                const filters = {};
+                results.forEach(r => {
+                    if (r.hasLegend && r.hasButton && r.buttonText) {
+                        const field = mapFieldName(r.legendText);
+                        if (field) {
+                            filters[field] = r.buttonText;
+                        }
+                    }
+                });
+
+                if (Object.keys(filters).length > 0) {
+                    log('strategies', 'Filtros extraídos:', filters, 'success');
+                    debugState.capturedFilters = filters;
+                }
+
+            } catch (error) {
+                log('strategies', 'Erro na estratégia 3', error.message, 'error');
+            }
+        }
+
+        // Estratégia 4: Busca por texto
+        function runStrategy4() {
+            if (!debugState.isInIframe) return;
+
+            log('strategies', 'Estratégia 4: Buscando por padrões de texto...', null, 'info');
+
+            try {
+                const parentDoc = window.parent.document;
+                const patterns = [
+                    /\d+\s*selecionados?/i,
+                    /junho|julho|agosto/i,
+                    /2025/,
+                    /\d{4}-\d{2}-\d{2}/,
+                    /últimos \d+ dias/i,
+                    /past\d+days/i
+                ];
+
+                const results = [];
+                const walker = parentDoc.createTreeWalker(
+                    parentDoc.body,
+                    NodeFilter.SHOW_TEXT,
+                    null,
+                    false
+                );
+
+                let node;
+                while (node = walker.nextNode()) {
+                    const text = node.textContent.trim();
+                    if (text) {
+                        patterns.forEach(pattern => {
+                            if (pattern.test(text)) {
+                                const parent = node.parentElement;
+                                results.push({
+                                    text: text,
+                                    pattern: pattern.toString(),
+                                    parentTag: parent.tagName,
+                                    parentClass: parent.className,
+                                    path: getElementPath(parent)
+                                });
+                            }
+                        });
+                    }
+                }
+
+                log('strategies', `Encontrados ${results.length} textos com padrões`, results, 'success');
+
+            } catch (error) {
+                log('strategies', 'Erro na estratégia 4', error.message, 'error');
+            }
+        }
+
+        // Estratégia 5: React Props
+        function runStrategy5() {
+            if (!debugState.isInIframe) return;
+
+            log('strategies', 'Estratégia 5: Tentando acessar props do React...', null, 'info');
+
+            try {
+                const parentDoc = window.parent.document;
+                const reactElements = [];
+
+                // Buscar elementos com React fiber
+                const allElements = parentDoc.querySelectorAll('*');
+                allElements.forEach(el => {
+                    const reactKeys = Object.keys(el).filter(k => k.startsWith('__react'));
+                    if (reactKeys.length > 0) {
+                        const fiber = el[reactKeys[0]];
+                        if (fiber && fiber.memoizedProps) {
+                            reactElements.push({
+                                tagName: el.tagName,
+                                className: el.className,
+                                props: extractReactProps(fiber.memoizedProps)
+                            });
+                        }
+                    }
+                });
+
+                log('strategies', `Encontrados ${reactElements.length} elementos React`, reactElements, 'success');
+
+            } catch (error) {
+                log('strategies', 'Erro na estratégia 5', error.message, 'error');
+            }
+        }
+
+        // Extrair props do React
+        function extractReactProps(props) {
+            const safe = {};
+            const interestingKeys = ['value', 'values', 'selected', 'selectedValue', 'label', 'name', 'parameter'];
+            
+            Object.keys(props).forEach(key => {
+                if (interestingKeys.includes(key) || key.includes('value') || key.includes('selected')) {
+                    safe[key] = props[key];
+                }
+            });
+            
+            return safe;
+        }
+
+        // Obter caminho do elemento
+        function getElementPath(el) {
+            const path = [];
+            while (el && el.tagName) {
+                let selector = el.tagName.toLowerCase();
+                if (el.id) {
+                    selector += '#' + el.id;
+                } else if (el.className) {
+                    selector += '.' + el.className.split(' ')[0];
+                }
+                path.unshift(selector);
+                el = el.parentElement;
+            }
+            return path.join(' > ');
+        }
+
+        // Mapear nome do campo
+        function mapFieldName(label) {
+            if (!label) return null;
+            
+            const normalized = label.toLowerCase().trim();
+            const mapping = {
+                'data': 'data',
+                'conta': 'conta',
+                'campanha': 'campanha',
+                'conjunto de anúncios': 'adset',
+                'anúncio': 'anuncio',
+                'peça': 'anuncio',
+                'dispositivo': 'device',
+                'device': 'device',
+                'plataforma': 'plataforma',
+                'posição': 'posicao',
+                'objetivo': 'objective',
+                'tipo de compra': 'buying_type',
+                'meta de otimização': 'optimization_goal',
+                'conversões consideradas': 'conversoes_consideradas'
+            };
+
+            return mapping[normalized] || null;
+        }
+
+        // Executar todas as estratégias
+        function runAllStrategies() {
+            debugState.strategies = [];
+            document.getElementById('strategies').innerHTML = '';
+            
+            runStrategy1();
+            setTimeout(() => runStrategy2(), 100);
+            setTimeout(() => runStrategy3(), 200);
+            setTimeout(() => runStrategy4(), 300);
+            setTimeout(() => runStrategy5(), 400);
+        }
+
+        // Analisar estrutura do DOM
+        function analyzeDOMStructure() {
+            if (!debugState.isInIframe) return;
+
+            log('domAnalysis', 'Analisando estrutura do DOM...', null, 'info');
+
+            try {
+                const parentDoc = window.parent.document;
+                const structure = {
+                    body: {
+                        childCount: parentDoc.body.children.length,
+                        className: parentDoc.body.className
+                    },
+                    forms: parentDoc.querySelectorAll('form').length,
+                    inputs: parentDoc.querySelectorAll('input').length,
+                    buttons: parentDoc.querySelectorAll('button').length,
+                    selects: parentDoc.querySelectorAll('select').length,
+                    fieldsets: parentDoc.querySelectorAll('fieldset').length,
+                    divs: parentDoc.querySelectorAll('div').length
+                };
+
+                log('domAnalysis', 'Estrutura do DOM:', structure, 'success');
+
+            } catch (error) {
+                log('domAnalysis', 'Erro ao analisar DOM', error.message, 'error');
+            }
+        }
+
+        // Buscar elementos de filtro
+        function findFilterElements() {
+            if (!debugState.isInIframe) return;
+
+            log('domAnalysis', 'Buscando elementos de filtro...', null, 'info');
+
+            try {
+                const parentDoc = window.parent.document;
+                const keywords = ['filter', 'parameter', 'param', 'filtro', 'data', 'date', 'conta', 'campanha'];
+                const found = [];
+
+                keywords.forEach(keyword => {
+                    // Por atributo
+                    const byAttr = parentDoc.querySelectorAll(`[*="${keyword}"]`);
+                    
+                    // Por classe
+                    const byClass = parentDoc.querySelectorAll(`[class*="${keyword}"]`);
+                    
+                    // Por id
+                    const byId = parentDoc.querySelectorAll(`[id*="${keyword}"]`);
+                    
+                    found.push({
+                        keyword: keyword,
+                        byAttribute: byAttr.length,
+                        byClass: byClass.length,
+                        byId: byId.length
+                    });
+                });
+
+                log('domAnalysis', 'Elementos encontrados por palavra-chave:', found, 'success');
+
+            } catch (error) {
+                log('domAnalysis', 'Erro ao buscar elementos', error.message, 'error');
+            }
+        }
+
+        // Extrair todo texto
+        function extractAllText() {
+            if (!debugState.isInIframe) return;
+
+            log('domAnalysis', 'Extraindo textos relevantes...', null, 'info');
+
+            try {
+                const parentDoc = window.parent.document;
+                const texts = [];
+                const elements = parentDoc.querySelectorAll('*');
+
+                elements.forEach(el => {
+                    const text = el.textContent?.trim();
+                    if (text && el.children.length === 0 && text.length > 2 && text.length < 100) {
+                        // Filtrar textos interessantes
+                        if (text.match(/\d/) || text.includes('selecionado') || 
+                            text.includes(':') || text.includes('-')) {
+                            texts.push({
+                                text: text,
+                                tag: el.tagName,
+                                parent: el.parentElement?.tagName
+                            });
+                        }
+                    }
+                });
+
+                log('domAnalysis', `Extraídos ${texts.length} textos relevantes`, texts.slice(0, 50), 'success');
+
+            } catch (error) {
+                log('domAnalysis', 'Erro ao extrair textos', error.message, 'error');
+            }
+        }
+
+        // Testar mapeamento
+        function testMapping() {
+            log('mapping', 'Testando mapeamento de filtros...', null, 'info');
+
+            const testCases = [
+                'Data', 'data', 'DATA',
+                'Conta', 'conta', 'CONTA',
+                'Campanha', 'campanha',
+                'Conjunto de Anúncios', 'conjunto de anúncios',
+                'Anúncio', 'anuncio', 'Peça', 'peça',
+                'Device', 'Dispositivo',
+                'Plataforma', 'plataforma',
+                'Objetivo', 'objective'
+            ];
+
+            const results = {};
+            testCases.forEach(test => {
+                const mapped = mapFieldName(test);
+                results[test] = mapped || 'NÃO MAPEADO';
+            });
+
+            log('mapping', 'Resultados do mapeamento:', results, 'success');
+        }
+
+        // Validar nomes de filtros
+        function validateFilterNames() {
+            log('mapping', 'Validando configuração de filtros...', null, 'info');
+
+            if (window.filterMapping) {
+                const validation = {
+                    totalMappings: Object.keys(window.filterMapping).length,
+                    mappings: {}
+                };
+
+                Object.entries(window.filterMapping).forEach(([field, config]) => {
+                    validation.mappings[field] = {
+                        metabaseParam: config.metabaseParam,
+                        friendlyName: config.friendlyName,
+                        type: config.type
+                    };
+                });
+
+                log('mapping', 'Configuração de filtros:', validation, 'success');
+            } else {
+                log('mapping', 'filterMapping não encontrado!', null, 'error');
+            }
+        }
+
+        // Mostrar filtros capturados
+        function showCapturedFilters() {
+            log('capturedFilters', 'Filtros atualmente capturados:', debugState.capturedFilters, 'info');
+        }
+
+        // Simular aplicação de filtros
+        function simulateFilterApplication() {
+            const filters = debugState.capturedFilters;
+            
+            if (Object.keys(filters).length === 0) {
+                log('capturedFilters', 'Nenhum filtro capturado ainda', null, 'warning');
+                return;
+            }
+
+            log('capturedFilters', 'Simulando aplicação de filtros...', null, 'info');
+
+            // Simular mapeamento para API
+            const apiParams = {};
+            Object.entries(filters).forEach(([field, value]) => {
+                const mapping = window.filterMapping?.[field];
+                if (mapping) {
+                    apiParams[mapping.metabaseParam] = value;
+                } else {
+                    apiParams[field] = value;
+                }
+            });
+
+            log('capturedFilters', 'Parâmetros para API:', apiParams, 'success');
+        }
+
+        // Live capture
+        let liveInterval;
+        function startLiveCapture() {
+            liveInterval = setInterval(() => {
+                if (!debugState.isInIframe) return;
+
+                try {
+                    const parentDoc = window.parent.document;
+                    const fieldsets = parentDoc.querySelectorAll('fieldset');
+                    const live = {};
+
+                    fieldsets.forEach(fieldset => {
+                        const legend = fieldset.querySelector('legend');
+                        const button = fieldset.querySelector('button');
+                        
+                        if (legend && button) {
+                            const field = legend.textContent.trim();
+                            const value = button.textContent.trim();
+                            if (field && value && value !== field) {
+                                live[field] = value;
+                            }
+                        }
+                    });
+
+                    const liveOutput = document.getElementById('liveOutput');
+                    liveOutput.innerHTML = Object.keys(live).length > 0 ? 
+                        formatJSON(live) : 
+                        '<span class="warning">Aguardando filtros...</span>';
+
+                } catch (error) {
+                    // Silencioso
+                }
+            }, 1000);
+        }
+
+        // Inicializar
+        function init() {
+            updateStatus();
+            
+            if (debugState.isInIframe) {
+                startLiveCapture();
+                log('strategies', 'Debug iniciado em modo iframe', null, 'success');
+            } else {
+                log('strategies', 'Debug iniciado em modo standalone', null, 'warning');
+            }
+        }
+
+        // Cleanup
+        window.addEventListener('beforeunload', () => {
+            if (liveInterval) clearInterval(liveInterval);
+        });
+
+        // Iniciar
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Rápido - Formato de Parâmetros Metabase API - 2</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1976d2;
+        }
+        .result {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { border-left: 4px solid #4caf50; }
+        .error { border-left: 4px solid #f44336; }
+        h2 { color: #333; }
+        .json { color: #9cdcfe; }
+        .string { color: #ce9178; }
+        .number { color: #b5cea8; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste Rápido - Formato Correto de Parâmetros</h1>
+
+    <div class="test-section">
+        <h2>1. Formato CORRETO dos Parâmetros (Baseado na Documentação)</h2>
+        <p>Este é o formato que deve funcionar:</p>
+        <pre class="result">
+{
+  "parameters": [
+    {
+      "type": "category",
+      "target": ["variable", ["template-tag", "data"]],
+      "value": "past7days"
+    }
+  ]
+}
+        </pre>
+        <button onclick="testCorrectFormat()">Testar Formato Correto</button>
+        <div id="result1"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Teste com Múltiplos Filtros</h2>
+        <button onclick="testMultipleFilters()">Testar Múltiplos Filtros</button>
+        <div id="result2"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Teste com Array de Valores</h2>
+        <button onclick="testArrayValues()">Testar Valores Múltiplos</button>
+        <div id="result3"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Teste Direto via cURL</h2>
+        <p>Copie e execute este comando no terminal para testar diretamente:</p>
+        <pre class="result">
+curl -X POST http://localhost:8091/api/card/51/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": [
+      {
+        "type": "category",
+        "target": ["variable", ["template-tag", "data"]],
+        "value": "past7days"
+      }
+    ]
+  }'
+        </pre>
+    </div>
+
+    <script>
+        // Função auxiliar para formatar JSON
+        function formatJSON(obj) {
+            return JSON.stringify(obj, null, 2)
+                .replace(/"([^"]+)":/g, '<span class="json">"$1"</span>:')
+                .replace(/: "([^"]+)"/g, ': <span class="string">"$1"</span>')
+                .replace(/: (\d+)/g, ': <span class="number">$1</span>');
+        }
+
+        // Mostrar resultado
+        function showResult(elementId, content, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.className = `result ${isSuccess ? 'success' : 'error'}`;
+            element.innerHTML = content;
+        }
+
+        // Teste 1: Formato Correto
+        async function testCorrectFormat() {
+            const parameters = [
+                {
+                    type: "category",
+                    target: ["variable", ["template-tag", "data"]],
+                    value: "past7days"
+                }
+            ];
+
+            showResult('result1', 'Executando teste...');
+
+            try {
+                const response = await fetch('http://localhost:8091/api/card/51/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ parameters })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const rowCount = data.data?.rows?.length || 0;
+                    showResult('result1', 
+                        `✅ SUCESSO! Retornou ${rowCount} linhas\n\n` +
+                        `Parâmetros enviados:\n${formatJSON({ parameters })}\n\n` +
+                        `Primeiras 5 linhas:\n${formatJSON(data.data?.rows?.slice(0, 5) || [])}`,
+                        true
+                    );
+                } else {
+                    showResult('result1', 
+                        `❌ Erro ${response.status}\n\n${formatJSON(data)}`,
+                        false
+                    );
+                }
+            } catch (error) {
+                showResult('result1', `❌ Erro de conexão: ${error.message}`, false);
+            }
+        }
+
+        // Teste 2: Múltiplos Filtros
+        async function testMultipleFilters() {
+            const parameters = [
+                {
+                    type: "category",
+                    target: ["variable", ["template-tag", "data"]],
+                    value: "past30days"
+                },
+                {
+                    type: "category",
+                    target: ["variable", ["template-tag", "plataforma"]],
+                    value: "facebook"
+                }
+            ];
+
+            showResult('result2', 'Executando teste com múltiplos filtros...');
+
+            try {
+                const response = await fetch('http://localhost:8091/api/card/51/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ parameters })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const rowCount = data.data?.rows?.length || 0;
+                    showResult('result2', 
+                        `✅ SUCESSO! Retornou ${rowCount} linhas\n\n` +
+                        `Parâmetros enviados:\n${formatJSON({ parameters })}`,
+                        true
+                    );
+                } else {
+                    showResult('result2', 
+                        `❌ Erro ${response.status}\n\n${formatJSON(data)}`,
+                        false
+                    );
+                }
+            } catch (error) {
+                showResult('result2', `❌ Erro de conexão: ${error.message}`, false);
+            }
+        }
+
+        // Teste 3: Array de Valores
+        async function testArrayValues() {
+            const parameters = [
+                {
+                    type: "category",
+                    target: ["variable", ["template-tag", "conta"]],
+                    value: ["Conta 1", "Conta 2"]  // Array de valores
+                }
+            ];
+
+            showResult('result3', 'Executando teste com array de valores...');
+
+            try {
+                const response = await fetch('http://localhost:8091/api/card/51/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ parameters })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const rowCount = data.data?.rows?.length || 0;
+                    showResult('result3', 
+                        `✅ SUCESSO! Retornou ${rowCount} linhas\n\n` +
+                        `Parâmetros enviados:\n${formatJSON({ parameters })}`,
+                        true
+                    );
+                } else {
+                    showResult('result3', 
+                        `❌ Erro ${response.status}\n\n${formatJSON(data)}`,
+                        false
+                    );
+                }
+            } catch (error) {
+                showResult('result3', `❌ Erro de conexão: ${error.message}`, false);
+            }
+        }
+
+        // Auto-executar primeiro teste ao carregar
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Página de teste carregada. Use os botões para testar diferentes formatos.');
+        });
+    </script>
+</body>
+</html>
