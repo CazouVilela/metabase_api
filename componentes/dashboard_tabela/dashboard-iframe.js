@@ -7,8 +7,18 @@ const params = new URLSearchParams(window.location.search);
 const questionId = params.get('question_id') || '51';
 
 let lastFilterString = '';
+let externalFilters = null;
+
+window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'dashboard-filters' && typeof event.data.filters === 'object') {
+        externalFilters = event.data.filters;
+    }
+});
 
 function getFiltersFromDashboard() {
+    if (externalFilters) {
+        return externalFilters;
+    }
     if (typeof window.captureDashboardFilters === 'function') {
         return window.captureDashboardFilters();
     }

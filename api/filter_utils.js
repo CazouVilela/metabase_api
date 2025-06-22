@@ -158,20 +158,25 @@ function captureDashboardFilters() {
     try {
         let containers = window.parent.document.querySelectorAll('.Parameter');
         if (containers.length === 0) {
-            containers = window.parent.document.querySelectorAll('fieldset');
+            containers = window.parent.document.querySelectorAll('fieldset, [data-testid="dashboard-filter"], div[class*="Filter"]');
         }
 
         containers.forEach(container => {
-            let labelEl = container.querySelector('label, .Parameter-name, [class*="Parameter-name"], legend');
-            if (!labelEl) return;
+            let labelEl = container.querySelector('label, legend, .Parameter-name, [class*="Parameter-name"], [data-testid="name"]');
+            let labelText = labelEl ? labelEl.textContent : null;
+            if (!labelText) {
+                const textNode = Array.from(container.childNodes).find(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+                if (textNode) labelText = textNode.textContent;
+            }
+            if (!labelText) return;
 
-            const field = typeof window.findFieldByLabel === 'function' ? window.findFieldByLabel(labelEl.textContent) : null;
+            const field = typeof window.findFieldByLabel === 'function' ? window.findFieldByLabel(labelText) : null;
             if (!field) return;
 
             const mapping = window.filterMapping && window.filterMapping[field];
             if (!mapping) return;
 
-            const widget = container.querySelector('[data-testid*="parameter-value-widget"], .Parameter-content input, .Parameter-content [role="button"], [role="button"], input, .lnsju');
+            const widget = container.querySelector('[data-testid*="parameter-value-widget"], [data-testid*="value"], .Parameter-content input, .Parameter-content [role="button"], [role="button"], input, .lnsju');
             if (!widget) return;
 
             const raw = widget.textContent?.trim() || widget.value?.trim();
