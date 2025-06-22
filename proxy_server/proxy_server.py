@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 
 from api.metabase_api import query_question
-from proxy_server.config import PROXY_PORT, STATIC_DIR
+from proxy_server.config import PROXY_PORT, STATIC_DIR, STATIC_API_DIR
 
 app = Flask(__name__)
 CORS(app)
@@ -18,6 +18,11 @@ CORS(app)
 @app.route('/componentes/dashboard_tabela/<path:filename>')
 def static_files(filename):
     directory = os.path.abspath(STATIC_DIR)
+    return send_from_directory(directory, filename)
+
+@app.route('/api_js/<path:filename>')
+def api_js(filename):
+    directory = os.path.abspath(STATIC_API_DIR)
     return send_from_directory(directory, filename)
 
 @app.route('/query')

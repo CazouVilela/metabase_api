@@ -7,20 +7,10 @@ const questionId = params.get('question_id') || '51';
 let lastFilterString = '';
 
 function getFiltersFromDashboard() {
-    const filters = {};
-    try {
-        const filterEls = window.parent.document.querySelectorAll('.dashboard-filter');
-        filterEls.forEach(el => {
-            const name = el.getAttribute('data-filter');
-            const input = el.querySelector('input, select');
-            if (name && input && input.value) {
-                filters[name] = input.value;
-            }
-        });
-    } catch (e) {
-        console.error('Failed to read filters', e);
+    if (typeof window.captureDashboardFilters === 'function') {
+        return window.captureDashboardFilters();
     }
-    return filters;
+    return {};
 }
 
 async function fetchData(filters) {
