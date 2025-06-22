@@ -1,2 +1,3 @@
 METABASE_BASE_URL = "http://localhost:3000"
-METABASE_API_TOKEN = "mb_B6aWb1EfxVWZI1moli2wO+RXMvH7PJz8dMVLtoI1qkg="
+METABASE_USERNAME = "cazouvilela@gmail.com"
+METABASE_PASSWORD = "$Riprip001"
