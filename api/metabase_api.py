@@ -1,24 +1,38 @@
 import requests
 from api.config import METABASE_BASE_URL, METABASE_USERNAME, METABASE_PASSWORD
 
-def get_session_token():
-    resp = requests.post(f"{METABASE_BASE_URL}/api/session", json={
+def get_metabase_session():
+    """
+    Autentica no Metabase e retorna o token de sessão.
+    """
+    response = requests.post(f"{METABASE_BASE_URL}/api/session", json={
         "username": METABASE_USERNAME,
         "password": METABASE_PASSWORD
     })
-    resp.raise_for_status()
-    return resp.json()['id']
+    response.raise_for_status()
+    return response.json()['id']
 
-def query_question(question_id, parameters):
-    session_token = get_session_token()
-    url = f"{METABASE_BASE_URL}/api/card/{question_id}/query/json"
-    headers = {
-        "X-Metabase-Session": session_token
-    }
+def query_question(question_id, params):
+    """
+    Consulta a API do Metabase para uma pergunta específica,
+    com parâmetros de filtro formatados corretamente.
+    """
+    token = get_metabase_session()
 
-    if not isinstance(parameters, dict):
-        parameters = {}
+    # Converte dict simples em formato de lista de parâmetros do Metabase
+    parameters = [
+        {
+            "type": "string/=",
+            "target": ["variable", ["template-tag", key]],
+            "value": value
+        }
+        for key, value in params.items()
+    ]
 
-    resp = requests.post(url, json={"parameters": parameters}, headers=headers)
-    resp.raise_for_status()
-    return resp.json()
+    response = requests.post(
+        f"{METABASE_BASE_URL}/api/card/{question_id}/query/json",
+        headers={"X-Metabase-Session": token},
+        json={"parameters": parameters}
+    )
+    response.raise_for_status()
+    return response.json()
