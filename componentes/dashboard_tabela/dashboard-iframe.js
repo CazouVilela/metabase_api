@@ -1,70 +1,70 @@
-const debugEl = document.getElementById('debug');
-const tableEl = document.getElementById('table-container');
+document.addEventListener("DOMContentLoaded", async () => {
+  const container = document.getElementById("table-container");
+  const debug = document.getElementById("debug");
 
-const params = new URLSearchParams(window.location.search);
-const questionId = params.get('question_id') || '51';
-
-let lastFilterString = '';
-
-function getFiltersFromDashboard() {
-    const filters = {};
+  function getParentUrlParams() {
     try {
-        const filterEls = window.parent.document.querySelectorAll('.dashboard-filter');
-        filterEls.forEach(el => {
-            const name = el.getAttribute('data-filter');
-            const input = el.querySelector('input, select');
-            if (name && input && input.value) {
-                filters[name] = input.value;
-            }
-        });
+      const parentUrl = window.parent.location.href;
+      const queryString = parentUrl.split('?')[1];
+      if (!queryString) return {};
+
+      const rawParams = new URLSearchParams(queryString);
+      const filteredParams = {};
+
+      for (const [key, value] of rawParams.entries()) {
+        if (value && value.trim() !== "") {
+          filteredParams[key] = value;
+        }
+      }
+
+      return filteredParams;
     } catch (e) {
-        console.error('Failed to read filters', e);
+      console.warn("Não foi possível acessar parâmetros do parent:", e);
+      return {};
     }
-    return filters;
-}
+  }
 
-async function fetchData(filters) {
-    const query = new URLSearchParams({ question_id: questionId, ...filters });
-    const url = `/proxy/query?${query.toString()}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    return { data, url, status: res.status };
-}
+  const iframeParams = new URLSearchParams(window.location.search);
+  const questionId = iframeParams.get("question_id") || "51";
 
-function renderDebug(filters, url, status, data) {
-    debugEl.innerHTML = `
-        <pre>Filtros: ${JSON.stringify(filters)}</pre>
-        <pre>Requisição: ${url}</pre>
-        <pre>Status: ${status}</pre>
-        <pre>Retorno: ${JSON.stringify(data).substring(0, 500)}...</pre>
-        <pre>Total linhas: ${data.length}</pre>
-    `;
-}
+  const filtroParams = getParentUrlParams();
+  const queryParams = new URLSearchParams({ question_id: questionId, ...filtroParams });
 
-function renderTable(data) {
-    if (!Array.isArray(data) || data.length === 0) {
-        tableEl.innerHTML = '<p>Nenhum dado retornado.</p>';
-        return;
+  // 🚨 Corrige caminho base para ambientes com subpath (como ngrok com pasta)
+  const basePath = window.location.pathname.split("/componentes")[0];
+  const proxyUrl = `${basePath}/query?${queryParams.toString()}`;
+
+  debug.innerHTML = `<small>🔗 Proxy URL: <code>${proxyUrl}</code></small>`;
+
+  try {
+    const response = await fetch(proxyUrl);
+    const data = await response.json();
+
+    if (Array.isArray(data) && data.length > 0) {
+      const table = document.createElement("table");
+      table.border = "1";
+      const header = table.insertRow();
+      Object.keys(data[0]).forEach((col) => {
+        const th = document.createElement("th");
+        th.textContent = col;
+        header.appendChild(th);
+      });
+
+      data.forEach((row) => {
+        const tr = table.insertRow();
+        Object.values(row).forEach((val) => {
+          const td = tr.insertCell();
+          td.textContent = val;
+        });
+      });
+
+      container.innerHTML = "";
+      container.appendChild(table);
+    } else {
+      container.innerHTML = "<p>🔍 Nenhum dado encontrado.</p>";
     }
-    const headers = Object.keys(data[0]);
-    let html = '<table class="table table-sm table-striped">';
-    html += '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead>';
-    html += '<tbody>' + data.map(row => {
-        return '<tr>' + headers.map(h => `<td>${row[h]}</td>`).join('') + '</tr>';
-    }).join('') + '</tbody></table>';
-    tableEl.innerHTML = html;
-}
-
-async function update() {
-    const filters = getFiltersFromDashboard();
-    const filterString = JSON.stringify(filters);
-    if (filterString !== lastFilterString) {
-        lastFilterString = filterString;
-        const { data, url, status } = await fetchData(filters);
-        renderDebug(filters, url, status, data);
-        renderTable(data);
-    }
-}
-
-setInterval(update, 500);
-update();
+  } catch (err) {
+    container.innerHTML = `<pre>Erro ao buscar dados: ${err}</pre>`;
+    console.error(err);
+  }
+});
