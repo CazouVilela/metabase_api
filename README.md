@@ -54,6 +54,10 @@ python proxy_server/proxy_server.py
 - `/componentes/<arquivo>`: Serve arquivos HTML/JS/CSS do frontend.
 - `/query?question_id=<id>&filtro1=...`: Faz a consulta autenticada ao Metabase com os filtros fornecidos.
 
+### Servindo utilidades JavaScript
+
+O endpoint `/api_js/<arquivo>` disponibiliza scripts utilitários armazenados no diretório `api`. Ele é útil para expor funções comuns compartilhadas pelos componentes. Exemplos de arquivos servidos são `filter_config.js` e `filter_utils.js`.
+
 ## Finalidade
 
 Essa estrutura permite a criação de componentes visuais reutilizáveis no Metabase que suportam filtros dinâmicos, utilizando uma camada intermediária para comunicação com a API do Metabase.
