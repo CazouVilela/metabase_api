@@ -2,12 +2,18 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Iframe Metabase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metabase Dashboard Table</title>
   <link rel="stylesheet" href="dashboard-iframe.css" />
 </head>
 <body>
-  <div id="table-container"></div>
+  <div id="update-indicator" class="update-indicator">
+    🔄 Dados atualizados
+  </div>
+  
   <div id="debug"></div>
+  <div id="table-container"></div>
+  
   <script src="dashboard-iframe.js"></script>
 </body>
 </html>

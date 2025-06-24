@@ -1,4 +1,5 @@
 import requests
+import json
 from api.config import (
     METABASE_BASE_URL,
     METABASE_USERNAME,
@@ -7,6 +8,7 @@ from api.config import (
 
 # ---------- sessão reutilizável ----------
 _session_cache = None
+
 def get_metabase_session() -> str:
     global _session_cache
     if _session_cache:
@@ -28,26 +30,46 @@ def query_question(question_id: int, params: list):
     (lista de dicts contendo type, target e value exatamente como a API espera).
     """
     token = get_metabase_session()
-
-    # limpa parâmetros vazios
+    
+    # Remove parâmetros vazios
     parameters = [
         p for p in params
         if p.get("value") not in (None, "", [], {})
     ]
 
-    print("📦 Parâmetros enviados ao Metabase:", parameters)
-
+    print("\n📦 Parâmetros enviados ao Metabase:")
+    print(json.dumps(parameters, indent=2, ensure_ascii=False))
+    
+    # Monta o payload
+    payload = {
+        "parameters": parameters
+    }
+    
+    print(f"\n🚀 POST para: {METABASE_BASE_URL}/api/card/{question_id}/query/json")
+    
     resp = requests.post(
         f"{METABASE_BASE_URL}/api/card/{question_id}/query/json",
-        headers={"X-Metabase-Session": token},
-        json={"parameters": parameters},
+        headers={
+            "X-Metabase-Session": token,
+            "Content-Type": "application/json"
+        },
+        json=payload,
         timeout=120,
     )
 
     if resp.status_code >= 400:
-        print("🛑 Erro na resposta do Metabase")
-        print("Status code:", resp.status_code)
-        print("Resposta bruta:", resp.text)
+        print("\n🛑 Erro na resposta do Metabase")
+        print(f"   Status code: {resp.status_code}")
+        print(f"   Resposta: {resp.text[:500]}")
 
     resp.raise_for_status()
-    return resp.json()
+    
+    result = resp.json()
+    
+    # Log do resultado
+    if isinstance(result, list):
+        print(f"\n✅ Query executada: {len(result)} linhas retornadas")
+        if len(result) == 5000:
+            print("   ⚠️  Atingiu limite de 5000 linhas - possível problema com filtros")
+    
+    return result
