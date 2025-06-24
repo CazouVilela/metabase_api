@@ -12,6 +12,7 @@ let externalFilters = null;
 window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'dashboard-filters' && typeof event.data.filters === 'object') {
         externalFilters = event.data.filters;
+        update(externalFilters);
     }
 });
 
@@ -78,8 +79,8 @@ function renderFilters(filters) {
     }
 }
 
-async function update() {
-    const filters = getFiltersFromDashboard();
+async function update(forcedFilters = null) {
+    const filters = forcedFilters || getFiltersFromDashboard();
     const filterString = JSON.stringify(filters);
     if (filterString !== lastFilterString) {
         lastFilterString = filterString;
@@ -90,5 +91,13 @@ async function update() {
     }
 }
 
-setInterval(update, 500);
+if (typeof window.startFilterMonitoring === 'function') {
+    window.startFilterMonitoring((f) => {
+        externalFilters = f;
+        update(f);
+    });
+} else {
+    setInterval(update, 1000);
+}
+
 update();

@@ -200,6 +200,60 @@ function captureDashboardFilters() {
     return result;
 }
 
+let _lastFiltersJSON = '';
+let _monitorInterval = null;
+let _observer = null;
+
+function observeParentDOM(callback) {
+    try {
+        _observer = new MutationObserver(() => {
+            clearTimeout(_observer._t);
+            _observer._t = setTimeout(callback, 300);
+        });
+        _observer.observe(window.parent.document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['aria-selected', 'data-value']
+        });
+    } catch (e) {
+        console.warn('observer fail', e.message);
+    }
+}
+
+function stopFilterMonitoring() {
+    if (_monitorInterval) {
+        clearInterval(_monitorInterval);
+        _monitorInterval = null;
+    }
+    if (_observer) {
+        _observer.disconnect();
+        _observer = null;
+    }
+}
+
+function startFilterMonitoring(callback, opts = {}) {
+    if (window.parent === window) return null;
+    const freq = opts.frequency || 1000;
+
+    function check() {
+        const filters = captureDashboardFilters();
+        const js = JSON.stringify(filters);
+        if (js !== _lastFiltersJSON) {
+            _lastFiltersJSON = js;
+            if (typeof callback === 'function') callback(filters);
+        }
+    }
+
+    _monitorInterval = setInterval(check, freq);
+    observeParentDOM(check);
+    setTimeout(check, 1500);
+    return () => stopFilterMonitoring();
+}
+
 if (typeof window !== 'undefined') {
     window.captureDashboardFilters = captureDashboardFilters;
+    window.startFilterMonitoring = startFilterMonitoring;
+    window.stopFilterMonitoring = stopFilterMonitoring;
 }
