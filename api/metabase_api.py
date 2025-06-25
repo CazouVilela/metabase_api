@@ -69,7 +69,5 @@ def query_question(question_id: int, params: list):
     # Log do resultado
     if isinstance(result, list):
         print(f"\n✅ Query executada: {len(result)} linhas retornadas")
-        if len(result) == 5000:
-            print("   ⚠️  Atingiu limite de 5000 linhas - possível problema com filtros")
     
     return result

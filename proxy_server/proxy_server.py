@@ -20,6 +20,36 @@ def static_files(filename):
     directory = os.path.abspath(STATIC_DIR)
     return send_from_directory(directory, filename)
 
+
+
+# ---------- Normaliza nome de parametros acentuados ----------
+def normalize_parameter_name(param_name):
+    """
+    Normaliza nomes de parâmetros para evitar problemas com caracteres especiais
+    """
+    normalization_map = {
+        'posição': 'posicao',
+        'posicao': 'posicao',
+        'anúncio': 'anuncio',
+        'anuncio': 'anuncio', 
+        'conversões_consideradas': 'conversoes_consideradas',
+        'conversoes_consideradas': 'conversoes_consideradas',
+        'objetivo': 'objective',
+        'objective': 'objective'
+    }
+    
+    # Tenta decodificar se ainda estiver codificado
+    try:
+        decoded_name = urllib.parse.unquote(param_name)
+        # Se mudou, usa o decodificado
+        if decoded_name != param_name:
+            param_name = decoded_name
+    except:
+        pass
+    
+    # Retorna o nome normalizado ou o original se não estiver no mapa
+    return normalization_map.get(param_name, param_name)
+
 # ---------- função para obter parâmetros com suporte a múltiplos valores ----------
 def get_all_parameters():
     """
@@ -34,32 +64,47 @@ def get_all_parameters():
         return params
     
     # Lista de todos os parâmetros conhecidos que podem ter múltiplos valores
+    # Agora com nomes normalizados
     multi_value_params = [
         'campanha', 'conta', 'adset', 'ad_name', 'plataforma', 
         'posicao', 'device', 'objective', 'optimization_goal', 
-        'buying_type', 'action_type_filter'
+        'buying_type', 'action_type_filter', 'anuncio',
+        'conversoes_consideradas'
     ]
     
-    # Para cada parâmetro conhecido, verifica se tem múltiplos valores
-    for param_name in multi_value_params:
-        values = request.args.getlist(param_name)
-        if values:
-            # Remove valores vazios
-            values = [v for v in values if v and v.strip()]
-            if values:
-                if len(values) == 1:
-                    params[param_name] = values[0]
-                else:
-                    params[param_name] = values
-    
-    # Adiciona outros parâmetros únicos (como question_id, data, etc)
+    # Processa todos os parâmetros da query string
     for key in request.args:
-        if key not in multi_value_params and key not in params:
+        # Normaliza o nome do parâmetro
+        normalized_key = normalize_parameter_name(key)
+        
+        # Se é um parâmetro que pode ter múltiplos valores
+        if normalized_key in multi_value_params:
+            values = request.args.getlist(key)
+            if values:
+                # Remove valores vazios
+                values = [v for v in values if v and v.strip()]
+                if values:
+                    if len(values) == 1:
+                        params[normalized_key] = values[0]
+                    else:
+                        params[normalized_key] = values
+        else:
+            # Outros parâmetros únicos (como question_id, data, etc)
             value = request.args.get(key)
             if value and value.strip():
-                params[key] = value
+                params[normalized_key] = value
+    
+    # Log de normalização
+    print("\n🔄 Normalização de parâmetros:")
+    for key in request.args:
+        normalized = normalize_parameter_name(key)
+        if key != normalized:
+            print(f"   '{key}' → '{normalized}'")
     
     return params
+
+
+
 
 # ---------- endpoint principal ----------
 @app.route('/query')
@@ -132,16 +177,17 @@ def query():
     print("📤 Parâmetros enviados ao Metabase:")
     print(json.dumps(metabase_params, indent=2, ensure_ascii=False))
     
+
     try:
         # Executa a query
         data = query_question(question_id, params=metabase_params)
         
-        # Log de resposta
+        # Log de resposta sem mensagens de limite
         if isinstance(data, list):
-            print(f"\n✅ Resposta recebida: {len(data)} linhas")
+            print(f"\n✅ Resposta recebida: {len(data):,} linhas")
             
-            if len(data) < 5000 and len(data) > 0:
-                print("   🎯 Filtros aplicados com sucesso!")
+            if len(data) > 0:
+                print("   🎯 Query executada com sucesso!")
                 
                 # Se tem filtros com múltiplos valores, destaca
                 multi_value_filters = [k for k, v in all_params.items() if isinstance(v, list)]
@@ -149,18 +195,23 @@ def query():
                     print(f"   📌 Filtros com múltiplos valores: {', '.join(multi_value_filters)}")
                     
             elif len(data) == 0 and len(metabase_params) > 0:
-                print("   ⚠️  0 linhas - possível problema com valores dos filtros")
-            elif len(data) >= 5000:
-                print("   ⚠️  Retornou limite máximo - filtros podem não estar funcionando")
+                print("   ⚠️  0 linhas - verifique se os valores dos filtros existem no banco")
                 
         else:
             print(f"\n✅ Resposta recebida: {type(data)}")
             
         return jsonify(data)
         
+    except requests.exceptions.Timeout:
+        print("\n⚠️  Timeout na query - aumentando limite de tempo...")
+        return jsonify({"error": "Query demorou muito tempo. Tente filtrar mais os dados."}), 504
+        
     except Exception as e:
         print(f"\n❌ Erro ao executar query: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+
+
 
 # ---------- endpoint de teste manual ----------
 @app.route('/test')

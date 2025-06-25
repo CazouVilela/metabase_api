@@ -16,77 +16,126 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 2000);
   }
 
-  // Captura parâmetros da URL do parent com suporte a múltiplos valores
-  function getParentUrlParams() {
-    try {
-      const parentUrl = window.parent.location.href;
-      const urlParts = parentUrl.split('?');
-      
-      if (urlParts.length < 2) return {};
-      
-      // Pega a query string raw
-      const queryString = urlParts[1];
-      const params = {};
-      
-      // Parse manual para capturar MÚLTIPLOS valores do mesmo parâmetro
-      queryString.split('&').forEach(param => {
-        if (param.includes('=')) {
-          let [key, ...valueParts] = param.split('=');
-          let value = valueParts.join('='); // Caso o valor tenha '='
+
+// Captura parâmetros da URL do parent com suporte a múltiplos valores
+function getParentUrlParams() {
+  try {
+    const parentUrl = window.parent.location.href;
+    const urlParts = parentUrl.split('?');
+    
+    if (urlParts.length < 2) return {};
+    
+    // Pega a query string raw
+    const queryString = urlParts[1];
+    const params = {};
+    
+    // Mapa de normalização de nomes de parâmetros
+    const paramNormalization = {
+      'posição': 'posicao',
+      'posicao': 'posicao',
+      'anúncio': 'anuncio', 
+      'anuncio': 'anuncio',
+      'conversões_consideradas': 'conversoes_consideradas',
+      'conversoes_consideradas': 'conversoes_consideradas',
+      'objetivo': 'objective',
+      'objective': 'objective'
+    };
+    
+    // Parse manual para capturar MÚLTIPLOS valores do mesmo parâmetro
+    queryString.split('&').forEach(param => {
+      if (param.includes('=')) {
+        let [key, ...valueParts] = param.split('=');
+        let value = valueParts.join('='); // Caso o valor tenha '='
+        
+        // Decodifica a chave - tratando dupla codificação
+        try {
+          // Primeiro substitui + por espaço
+          key = key.replace(/\+/g, ' ');
           
-          // Decodifica a chave
-          try {
-            key = decodeURIComponent(key);
-          } catch (e) {
-            console.warn(`Erro ao decodificar chave: ${key}`, e);
-            return;
-          }
+          // Decodifica uma vez
+          key = decodeURIComponent(key);
           
-          // Decodifica o valor
-          try {
-            // Primeiro substitui + por espaço (padrão de URL encoding)
-            value = value.replace(/\+/g, ' ');
-            // Depois decodifica outros caracteres especiais
-            value = decodeURIComponent(value);
-          } catch (e) {
-            console.warn(`Erro ao decodificar valor: ${value}`, e);
-            return;
-          }
-          
-          // Só adiciona se tiver valor
-          if (value && value.trim() !== "") {
-            // IMPORTANTE: Suporta múltiplos valores para a mesma chave
-            if (params[key]) {
-              // Se já existe, converte para array ou adiciona ao array
-              if (Array.isArray(params[key])) {
-                params[key].push(value);
-              } else {
-                params[key] = [params[key], value];
-              }
-            } else {
-              // Primeira ocorrência
-              params[key] = value;
+          // Se ainda tiver %, decodifica novamente (dupla codificação)
+          if (key.includes('%')) {
+            try {
+              key = decodeURIComponent(key);
+            } catch (e) {
+              // Se falhar a segunda decodificação, mantém como está
             }
           }
+          
+          // Normaliza o nome do parâmetro
+          const normalizedKey = paramNormalization[key] || key;
+          key = normalizedKey;
+          
+        } catch (e) {
+          console.warn(`Erro ao decodificar chave: ${key}`, e);
+          return;
         }
-      });
-      
-      console.log("📋 Parâmetros capturados (com suporte a múltiplos valores):", params);
-      
-      // Log especial para parâmetros com múltiplos valores
-      Object.entries(params).forEach(([key, value]) => {
-        if (Array.isArray(value)) {
-          console.log(`🔹 Parâmetro '${key}' tem ${value.length} valores:`, value);
+        
+        // Decodifica o valor
+        try {
+          // Primeiro substitui + por espaço (padrão de URL encoding)
+          value = value.replace(/\+/g, ' ');
+          // Depois decodifica outros caracteres especiais
+          value = decodeURIComponent(value);
+          
+          // Se ainda tiver %, tenta decodificar novamente
+          if (value.includes('%')) {
+            try {
+              value = decodeURIComponent(value);
+            } catch (e) {
+              // Se falhar, mantém como está
+            }
+          }
+        } catch (e) {
+          console.warn(`Erro ao decodificar valor: ${value}`, e);
+          return;
         }
-      });
-      
-      return params;
-      
-    } catch (e) {
-      console.warn("❌ Não foi possível acessar parâmetros do parent:", e);
-      return {};
+        
+        // Só adiciona se tiver valor
+        if (value && value.trim() !== "") {
+          // IMPORTANTE: Suporta múltiplos valores para a mesma chave
+          if (params[key]) {
+            // Se já existe, converte para array ou adiciona ao array
+            if (Array.isArray(params[key])) {
+              params[key].push(value);
+            } else {
+              params[key] = [params[key], value];
+            }
+          } else {
+            // Primeira ocorrência
+            params[key] = value;
+          }
+        }
+      }
+    });
+    
+    console.log("📋 Parâmetros capturados (com suporte a múltiplos valores):", params);
+    
+    // Log especial para parâmetros normalizados
+    const normalizedParams = Object.keys(paramNormalization).filter(k => params[paramNormalization[k]]);
+    if (normalizedParams.length > 0) {
+      console.log("🔄 Parâmetros normalizados:", normalizedParams.join(', '));
     }
+    
+    // Log especial para parâmetros com múltiplos valores
+    Object.entries(params).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        console.log(`🔹 Parâmetro '${key}' tem ${value.length} valores:`, value);
+      }
+    });
+    
+    return params;
+    
+  } catch (e) {
+    console.warn("❌ Não foi possível acessar parâmetros do parent:", e);
+    return {};
   }
+}
+
+
+
 
   // Carrega os dados
   async function loadData(reason = "manual") {
@@ -230,6 +279,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <strong>❌ Erro:</strong> ${data.error}
           </div>
         `;
+
       } else {
         // Se não achou dados, mostra informação sobre múltiplos valores
         const hasMultipleValues = Object.values(filtroParams).some(v => Array.isArray(v));
@@ -243,8 +293,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border: 1px solid #2196F3; border-radius: 4px;">
                 <p style="color: #1976D2; font-weight: bold;">ℹ️ Filtros com múltiplos valores detectados</p>
                 <p style="font-size: 14px; margin-top: 10px;">
-                  Alguns filtros têm múltiplos valores selecionados. Verifique se o servidor
-                  está processando corretamente filtros com múltiplas seleções.
+                  Verifique se os valores selecionados existem exatamente como estão no banco de dados.
                 </p>
               </div>
             ` : ''}
@@ -256,7 +305,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           </div>
         `;
       }
-      
+
+
+
     } catch (err) {
       console.error("❌ Erro:", err);
       container.innerHTML = `
@@ -270,44 +321,110 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // Renderiza a tabela
-  function renderTable(data) {
-    const table = document.createElement("table");
-    
-    // Header
-    const header = table.insertRow();
-    
-    Object.keys(data[0]).forEach((col) => {
-      const th = document.createElement("th");
-      th.textContent = col;
-      header.appendChild(th);
-    });
 
-    // Dados
-    data.forEach((row) => {
-      const tr = table.insertRow();
-      
-      Object.values(row).forEach((val) => {
-        const td = tr.insertCell();
-        td.textContent = val !== null && val !== undefined ? val : "";
-      });
-    });
 
-    // Container com informações
+// Renderiza a tabela com otimizações para grandes volumes
+function renderTable(data) {
+  console.log(`📊 Renderizando ${data.length.toLocaleString('pt-BR')} linhas...`);
+  
+  // Para tabelas muito grandes, mostra progresso
+  if (data.length > 10000) {
     container.innerHTML = `
-      <div class="table-info">
-        <div class="record-count">📊 Total de registros: ${data.length}</div>
-        <div>
-          <span class="update-time">✅ Atualizado: ${new Date().toLocaleTimeString('pt-BR')}</span>
-          <span class="update-count">(Update #${updateCount})</span>
-        </div>
+      <div class="loading-container">
+        <div class="spinner"></div>
+        <p>⏳ Renderizando ${data.length.toLocaleString('pt-BR')} linhas...</p>
+        <p style="font-size: 12px; color: #666; margin-top: 10px;">
+          Isso pode levar alguns segundos para tabelas grandes
+        </p>
       </div>
-      <div class="table-scroll-container"></div>
     `;
     
-    // Adiciona tabela no container com scroll
-    container.querySelector('.table-scroll-container').appendChild(table);
+    // Pequeno delay para mostrar o loading
+    setTimeout(() => renderLargeTable(data), 100);
+  } else {
+    renderLargeTable(data);
   }
+}
+
+function renderLargeTable(data) {
+  const startTime = performance.now();
+  
+  // Cria tabela usando DocumentFragment para melhor performance
+  const table = document.createElement("table");
+  const fragment = document.createDocumentFragment();
+  
+  // Header
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  
+  Object.keys(data[0]).forEach((col) => {
+    const th = document.createElement("th");
+    th.textContent = col;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  
+  // Body - renderização otimizada
+  const tbody = document.createElement("tbody");
+  
+  // Para tabelas muito grandes, renderiza em chunks
+  const chunkSize = 1000;
+  const totalChunks = Math.ceil(data.length / chunkSize);
+  
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * chunkSize;
+    const end = Math.min(start + chunkSize, data.length);
+    const chunk = data.slice(start, end);
+    
+    chunk.forEach((row) => {
+      const tr = document.createElement("tr");
+      
+      Object.values(row).forEach((val) => {
+        const td = document.createElement("td");
+        td.textContent = val !== null && val !== undefined ? val : "";
+        tr.appendChild(td);
+      });
+      
+      fragment.appendChild(tr);
+    });
+  }
+  
+  tbody.appendChild(fragment);
+  table.appendChild(tbody);
+  
+  const renderTime = ((performance.now() - startTime) / 1000).toFixed(2);
+  
+  // Container com informações
+  container.innerHTML = `
+    <div class="table-info">
+      <div class="record-count">
+        📊 Total: <strong>${data.length.toLocaleString('pt-BR')}</strong> registros
+        ${data.length > 10000 ? `<span style="color: #666; font-size: 12px; margin-left: 10px;">(renderizado em ${renderTime}s)</span>` : ''}
+      </div>
+      <div>
+        <span class="update-time">✅ Atualizado: ${new Date().toLocaleTimeString('pt-BR')}</span>
+        <span class="update-count">(Update #${updateCount})</span>
+      </div>
+    </div>
+    <div class="table-scroll-container"></div>
+  `;
+  
+  // Adiciona tabela no container com scroll
+  container.querySelector('.table-scroll-container').appendChild(table);
+  
+  // Log de performance
+  if (data.length > 5000) {
+    console.log(`✅ Tabela com ${data.length.toLocaleString('pt-BR')} linhas renderizada em ${renderTime}s`);
+  }
+}
+
+
+
+
+
+
+
 
   // Estratégia de verificação inteligente
   let checkInterval = 1000; // Começa verificando a cada 1 segundo
