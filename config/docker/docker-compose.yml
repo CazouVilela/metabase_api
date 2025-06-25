@@ -1,0 +1,28 @@
+services:
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      JAVA_OPTS: "-Xms4G -Xmx8G -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+      MB_UNAGGREGATED_QUERY_ROW_LIMIT: "20000000"
+      MB_QUERY_TIMEOUT_SECONDS: "600"
+      MB_QUERY_CACHING_ENABLED: "true"
+      MB_QUERY_CACHING_TTL_RATIO: "100"
+      MB_JETTY_THREADS: "50"
+      MB_JETTY_MAX_QUEUED_REQUESTS: "1000"
+      MB_APPLICATION_DB_MAX_CONNECTION_POOL_SIZE: "20"
+      MB_DB_TYPE: "postgres"
+      MB_DB_DBNAME: "metabase"
+      MB_DB_PORT: "5432"
+      MB_DB_USER: "metabase_user"
+      MB_DB_PASS: "${METABASE_PASSWORD}"
+      MB_DB_HOST: "host.docker.internal"
+    restart: always
+    mem_limit: 10g
+    mem_reservation: 4g
+    cpus: '4.0'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

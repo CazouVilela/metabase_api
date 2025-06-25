@@ -16,26 +16,72 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 2000);
   }
 
-  // Captura parâmetros da URL do parent
+  // Captura parâmetros da URL do parent com suporte a múltiplos valores
   function getParentUrlParams() {
     try {
       const parentUrl = window.parent.location.href;
-      const queryString = parentUrl.split('?')[1];
-      if (!queryString) return {};
-
-      const rawParams = new URLSearchParams(queryString);
-      const filteredParams = {};
-
-      for (const [key, value] of rawParams.entries()) {
-        const decodedKey = decodeURIComponent(key);
-        const decodedValue = decodeURIComponent(value);
-        
-        if (decodedValue && decodedValue.trim() !== "") {
-          filteredParams[decodedKey] = decodedValue;
+      const urlParts = parentUrl.split('?');
+      
+      if (urlParts.length < 2) return {};
+      
+      // Pega a query string raw
+      const queryString = urlParts[1];
+      const params = {};
+      
+      // Parse manual para capturar MÚLTIPLOS valores do mesmo parâmetro
+      queryString.split('&').forEach(param => {
+        if (param.includes('=')) {
+          let [key, ...valueParts] = param.split('=');
+          let value = valueParts.join('='); // Caso o valor tenha '='
+          
+          // Decodifica a chave
+          try {
+            key = decodeURIComponent(key);
+          } catch (e) {
+            console.warn(`Erro ao decodificar chave: ${key}`, e);
+            return;
+          }
+          
+          // Decodifica o valor
+          try {
+            // Primeiro substitui + por espaço (padrão de URL encoding)
+            value = value.replace(/\+/g, ' ');
+            // Depois decodifica outros caracteres especiais
+            value = decodeURIComponent(value);
+          } catch (e) {
+            console.warn(`Erro ao decodificar valor: ${value}`, e);
+            return;
+          }
+          
+          // Só adiciona se tiver valor
+          if (value && value.trim() !== "") {
+            // IMPORTANTE: Suporta múltiplos valores para a mesma chave
+            if (params[key]) {
+              // Se já existe, converte para array ou adiciona ao array
+              if (Array.isArray(params[key])) {
+                params[key].push(value);
+              } else {
+                params[key] = [params[key], value];
+              }
+            } else {
+              // Primeira ocorrência
+              params[key] = value;
+            }
+          }
         }
-      }
-
-      return filteredParams;
+      });
+      
+      console.log("📋 Parâmetros capturados (com suporte a múltiplos valores):", params);
+      
+      // Log especial para parâmetros com múltiplos valores
+      Object.entries(params).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          console.log(`🔹 Parâmetro '${key}' tem ${value.length} valores:`, value);
+        }
+      });
+      
+      return params;
+      
     } catch (e) {
       console.warn("❌ Não foi possível acessar parâmetros do parent:", e);
       return {};
@@ -70,17 +116,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     const iframeParams = new URLSearchParams(window.location.search);
     const questionId = iframeParams.get("question_id") || "51";
     
-    // Monta query string
-    const queryParams = new URLSearchParams({ 
-      question_id: questionId, 
-      ...filtroParams 
-    });
-
-    // Caminho base
+    // Monta URL manualmente para ter controle sobre encoding
     const basePath = window.location.pathname.split("/componentes")[0];
-    const proxyUrl = `${basePath}/query?${queryParams.toString()}`;
+    const urlParams = new URLSearchParams();
+    urlParams.append('question_id', questionId);
+    
+    // Adiciona cada parâmetro com encoding controlado
+    // IMPORTANTE: Suporta múltiplos valores
+    Object.entries(filtroParams).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        // Múltiplos valores - adiciona cada um
+        value.forEach(v => {
+          urlParams.append(key, v);
+        });
+      } else {
+        // Valor único
+        urlParams.append(key, value);
+      }
+    });
+    
+    const proxyUrl = `${basePath}/query?${urlParams.toString()}`;
+    console.log("🔗 URL do proxy:", proxyUrl);
 
-    // Atualiza debug info
+    // Atualiza debug info com suporte a múltiplos valores
     debug.innerHTML = `
       <details ${updateCount === 1 ? 'open' : ''}>
         <summary>
@@ -92,8 +150,60 @@ document.addEventListener("DOMContentLoaded", async () => {
           <p><strong>Filtros ativos:</strong> ${Object.keys(filtroParams).length}</p>
           <p><strong>Última atualização:</strong> ${new Date().toLocaleTimeString('pt-BR')} - ${reason}</p>
           <p><strong>Auto-update:</strong> <span style="color: green;">✓ Ativado</span></p>
+          
+          <details style="margin-top: 10px; background: #e3f2fd; padding: 10px; border-radius: 4px;">
+            <summary><strong>🔹 Filtros com Múltiplos Valores</strong></summary>
+            <div style="margin-top: 10px; font-size: 12px;">
+              ${Object.entries(filtroParams).map(([key, value]) => {
+                if (Array.isArray(value)) {
+                  return `
+                    <div style="margin: 5px 0; padding: 8px; background: white; border-radius: 3px; border: 1px solid #2196F3;">
+                      <strong>${key}:</strong> ${value.length} valores selecionados
+                      <ul style="margin: 5px 0 0 20px;">
+                        ${value.map(v => `<li>"${v}"</li>`).join('')}
+                      </ul>
+                    </div>
+                  `;
+                }
+                return '';
+              }).join('')}
+              
+              ${Object.entries(filtroParams).every(([k, v]) => !Array.isArray(v)) ? 
+                '<p style="color: #666;">Nenhum filtro com múltiplos valores detectado.</p>' : ''
+              }
+            </div>
+          </details>
+          
           <details style="margin-top: 10px;">
-            <summary>Parâmetros detalhados</summary>
+            <summary>Parâmetros com caracteres especiais</summary>
+            <div style="margin-top: 5px; font-size: 12px;">
+              ${Object.entries(filtroParams).map(([key, value]) => {
+                const specialChars = ['+', '&', '%', '=', '?', '#', '|', '/', '*', '@', '!', '$', '^', '(', ')', '[', ']', '{', '}'];
+                
+                // Trata arrays
+                const values = Array.isArray(value) ? value : [value];
+                const results = [];
+                
+                values.forEach((v, index) => {
+                  const foundChars = specialChars.filter(char => v.includes(char));
+                  if (foundChars.length > 0) {
+                    results.push(`
+                      <div style="margin: 5px 0; padding: 5px; background: #f0f0f0; border-radius: 3px;">
+                        <strong>${key}${Array.isArray(value) ? ` [${index + 1}]` : ''}:</strong><br>
+                        Valor: "${v}"<br>
+                        Caracteres especiais: ${foundChars.map(c => `<code>${c}</code>`).join(', ')}
+                      </div>
+                    `);
+                  }
+                });
+                
+                return results.join('');
+              }).join('')}
+            </div>
+          </details>
+          
+          <details style="margin-top: 10px;">
+            <summary>Todos os parâmetros</summary>
             <pre>${JSON.stringify(filtroParams, null, 2)}</pre>
           </details>
         </div>
@@ -121,10 +231,28 @@ document.addEventListener("DOMContentLoaded", async () => {
           </div>
         `;
       } else {
+        // Se não achou dados, mostra informação sobre múltiplos valores
+        const hasMultipleValues = Object.values(filtroParams).some(v => Array.isArray(v));
+        
         container.innerHTML = `
           <div class="empty-state">
             <p class="empty-icon">🔍</p>
             <p>Nenhum dado encontrado com os filtros aplicados.</p>
+            
+            ${hasMultipleValues ? `
+              <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border: 1px solid #2196F3; border-radius: 4px;">
+                <p style="color: #1976D2; font-weight: bold;">ℹ️ Filtros com múltiplos valores detectados</p>
+                <p style="font-size: 14px; margin-top: 10px;">
+                  Alguns filtros têm múltiplos valores selecionados. Verifique se o servidor
+                  está processando corretamente filtros com múltiplas seleções.
+                </p>
+              </div>
+            ` : ''}
+            
+            <details style="margin-top: 20px; font-size: 14px;">
+              <summary>Debug: Parâmetros enviados</summary>
+              <pre style="margin-top: 10px; text-align: left;">${JSON.stringify(filtroParams, null, 2)}</pre>
+            </details>
           </div>
         `;
       }
@@ -200,39 +328,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     setTimeout(smartCheck, checkInterval);
   }
-
-  // Observa mudanças no DOM do parent (se possível)
-  try {
-    const parentDoc = window.parent.document;
-    const observer = new MutationObserver(() => {
-      console.log("🔄 Mudança detectada no parent DOM");
-      loadData("mudança no DOM");
-    });
-    
-    // Observa mudanças nos elementos de filtro do Metabase
-    const filterElements = parentDoc.querySelectorAll('[data-testid*="filter"], .FilterWidget, .DashCard');
-    filterElements.forEach(el => {
-      observer.observe(el, { 
-        attributes: true, 
-        childList: true, 
-        subtree: true 
-      });
-    });
-  } catch (e) {
-    console.log("ℹ️ Não foi possível observar o parent DOM (cross-origin)");
-  }
-
-  // Escuta eventos de mudança
-  ['popstate', 'hashchange'].forEach(eventName => {
-    try {
-      window.parent.addEventListener(eventName, () => {
-        console.log(`🔄 Evento ${eventName} detectado`);
-        loadData(`evento ${eventName}`);
-      });
-    } catch (e) {
-      console.log(`ℹ️ Não foi possível escutar evento ${eventName} no parent`);
-    }
-  });
 
   // Verifica quando a janela volta ao foco
   document.addEventListener('visibilitychange', () => {

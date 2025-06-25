@@ -1,3 +1,20 @@
-Flask
-Flask-Cors
-requests
+# Metabase Customizações - Dependências Python
+
+# Framework Web
+Flask==2.3.2
+Flask-CORS==4.0.0
+
+# Requisições HTTP
+requests==2.31.0
+urllib3==2.0.3
+
+# Utilitários
+python-dotenv==1.0.0  # Para variáveis de ambiente (opcional)
+
+# Desenvolvimento (opcional)
+pytest==7.4.0  # Para testes automatizados
+black==23.3.0  # Formatador de código
+flake8==6.0.0  # Linter
+
+# Produção (opcional)
+gunicorn==20.1.0  # Servidor WSGI para produção
