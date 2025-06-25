@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tabela Virtual - Metabase Dashboard</title>
+  
+  <!-- CSS Principal -->
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- ClusterizeJS para virtualização -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.min.css">
+</head>
+<body>
+  <!-- Container principal -->
+  <div id="app">
+    <!-- Indicador de atualização -->
+    <div id="update-indicator" class="update-indicator">
+      🔄 Dados atualizados
+    </div>
+    
+    <!-- Área de debug (colapsável) -->
+    <div id="debug-container" class="debug-container"></div>
+    
+    <!-- Container da tabela -->
+    <div id="table-container" class="table-container">
+      <!-- Loading inicial -->
+      <div class="loading-container">
+        <div class="spinner"></div>
+        <p>Inicializando...</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Scripts externos -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.min.js"></script>
+  
+  <!-- Scripts da aplicação -->
+  <script src="js/utils.js"></script>
+  <script src="js/filtros.js"></script>
+  <script src="js/data-loader.js"></script>
+  <script src="js/virtual-table.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
