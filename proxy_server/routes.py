@@ -19,6 +19,13 @@ def register_routes(app):
     
     # ------- ROTAS DA API -------
     
+
+    # ------- ROTAS DA API -------
+
+# ------- ROTAS DA API -------
+
+# ------- ROTAS DA API -------
+    
     @app.route('/api/query', methods=['GET'])
     def api_query():
         """Endpoint principal para consultas"""
@@ -35,6 +42,61 @@ def register_routes(app):
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    @app.route('/api/query/direct', methods=['GET'])
+    def api_query_direct():
+        """Endpoint para consultas diretas ao PostgreSQL (performance otimizada)"""
+        from api.consulta_direta import consulta_direta
+        
+        try:
+            # Obtém parâmetros
+            question_id = request.args.get('question_id', '51')
+            try:
+                question_id = int(question_id)
+            except ValueError:
+                return jsonify({
+                    'error': f'ID da pergunta inválido: {question_id}',
+                    'tipo': 'parametro_invalido'
+                }), 400
+            
+            # Parâmetros opcionais de configuração
+            database = request.args.get('database')
+            schema = request.args.get('schema')
+            
+            # Configura se necessário
+            if database or schema:
+                if not consulta_direta.testar_configuracao(database, schema):
+                    return jsonify({
+                        'error': 'Falha ao configurar conexão com banco de dados',
+                        'database': database or 'agencias',
+                        'schema': schema or 'road',
+                        'tipo': 'erro_configuracao'
+                    }), 500
+            
+            # Executa consulta direta (sem streaming por enquanto)
+            resultado = consulta_direta.executar_consulta_direta_simples(question_id)
+            
+            return jsonify(resultado)
+            
+        except Exception as e:
+            import traceback
+            erro_detalhado = traceback.format_exc()
+            
+            # Log no servidor
+            print(f"\n❌ ERRO 500 - Detalhes:")
+            print(erro_detalhado)
+            
+            # Retorna erro estruturado
+            return jsonify({
+                'error': str(e),
+                'tipo': 'erro_execucao',
+                'question_id': question_id,
+                'detalhes': erro_detalhado.split('\n')[-3:-1]  # Últimas linhas do erro
+            }), 500
+
+
+
+
+
     @app.route('/api/question/<int:question_id>/info', methods=['GET'])
     def api_question_info(question_id):
         """Obtém informações sobre uma questão"""

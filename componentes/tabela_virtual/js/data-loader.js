@@ -91,9 +91,16 @@ class DataLoader {
   /**
    * Constrói URL com parâmetros
    */
-  buildUrl(questionId, filtros) {
+  buildUrl(questionId, filtros, useDirect = true) {
+    // Usa endpoint direto por padrão para melhor performance
+    const endpoint = useDirect ? '/api/query/direct' : '/api/query';
     const params = new URLSearchParams();
     params.append('question_id', questionId);
+
+    // Adiciona database e schema se disponíveis
+    const urlParams = Utils.getUrlParams();
+    if (urlParams.database) params.append('database', urlParams.database);
+    if (urlParams.schema) params.append('schema', urlParams.schema);
 
     // Adiciona filtros
     Object.entries(filtros).forEach(([key, value]) => {
@@ -104,7 +111,7 @@ class DataLoader {
       }
     });
 
-    return `${this.baseUrl}/api/query?${params.toString()}`;
+    return `${this.baseUrl}${endpoint}?${params.toString()}`;
   }
 
   /**
