@@ -30,6 +30,7 @@ from .consulta_metabase import ConsultaMetabase, consulta_metabase
 from .processamentoDados_json import ProcessadorJSON
 from .processamentoDados_transformacao import ProcessadorTransformacao
 from .processamentoDados_agregacao import ProcessadorAgregacao
+from .metabase_dataset import MetabaseDatasetClient, metabase_dataset_client
 
 __all__ = [
     'MetabaseClient',

@@ -135,39 +135,73 @@ class App {
   /**
    * Carregamento tradicional (sem streaming)
    */
+
+/**
+   * Carregamento tradicional (sem streaming)
+   */
   async loadDataTraditional(filtros) {
     const startTime = performance.now();
     
-    // Carrega dados
-    const dados = await dataLoader.loadWithRetry(this.questionId, filtros);
+    // Por padrão, usa API Native Dataset para melhor performance
+    const useNativeAPI = Utils.getUrlParams().native !== 'false';
     
-    if (!dados) {
-      this.virtualTable.renderEmpty();
-      return;
-    }
-
-    // Renderiza tabela
-    if (Array.isArray(dados) && dados.length > 0) {
-      const loadTime = (performance.now() - startTime) / 1000;
-      Utils.log(`⏱️  Tempo de carregamento: ${loadTime.toFixed(2)}s`);
-      
-      const renderStart = performance.now();
-      this.virtualTable.render(dados);
-      const renderTime = (performance.now() - renderStart) / 1000;
-      
-      Utils.log(`⏱️  Tempo de renderização: ${renderTime.toFixed(2)}s`);
-      Utils.log(`⏱️  TEMPO TOTAL: ${(loadTime + renderTime).toFixed(2)}s`);
-      
-      // Monitora memória se muitos dados
-      if (dados.length > 10000) {
-        dataLoader.monitorMemory();
+    let dados;
+    
+    try {
+      if (useNativeAPI) {
+        // Usa API Native (muito mais rápido!)
+        dados = await dataLoader.loadDataNative(this.questionId, filtros, 'dataset');
+      } else {
+        // Método antigo (Query direta)
+        dados = await dataLoader.loadWithRetry(this.questionId, filtros);
       }
-    } else if (dados.error) {
-      throw new Error(dados.error);
-    } else {
-      this.virtualTable.renderEmpty();
+      
+      if (!dados) {
+        this.virtualTable.renderEmpty();
+        return;
+      }
+
+      // Renderiza tabela
+      if (Array.isArray(dados) && dados.length > 0) {
+        const loadTime = (performance.now() - startTime) / 1000;
+        const method = useNativeAPI ? 'Native API' : 'Direct SQL';
+        Utils.log(`⏱️  Tempo de carregamento (${method}): ${loadTime.toFixed(2)}s`);
+        
+        const renderStart = performance.now();
+        this.virtualTable.render(dados);
+        const renderTime = (performance.now() - renderStart) / 1000;
+        
+        Utils.log(`⏱️  Tempo de renderização: ${renderTime.toFixed(2)}s`);
+        Utils.log(`⏱️  TEMPO TOTAL: ${(loadTime + renderTime).toFixed(2)}s`);
+        
+        // Monitora memória se muitos dados
+        if (dados.length > 10000) {
+          dataLoader.monitorMemory();
+        }
+      } else if (dados.error) {
+        throw new Error(dados.error);
+      } else {
+        this.virtualTable.renderEmpty();
+      }
+    } catch (error) {
+      // Se falhar com native, tenta método antigo
+      if (useNativeAPI) {
+        Utils.log('⚠️ Native API falhou, tentando Direct SQL...');
+        const dados = await dataLoader.loadWithRetry(this.questionId, filtros);
+        if (dados && dados.length > 0) {
+          this.virtualTable.render(dados);
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
     }
   }
+
+
+
+
 
   /**
    * Carregamento com streaming

@@ -217,6 +217,85 @@ def register_routes(app):
                 'X-Accel-Buffering': 'no'  # Desabilita buffering no nginx
             }
         )
+
+
+
+    @app.route('/api/query/native', methods=['GET'])
+    def api_query_native():
+        """
+        Endpoint que usa a API nativa do Metabase
+        Tenta diferentes métodos para melhor performance
+        """
+        from api.metabase_dataset import metabase_dataset_client
+        
+        try:
+            # Obtém parâmetros
+            question_id = request.args.get('question_id', '51')
+            question_id = int(question_id)
+            
+            # Captura filtros
+            filtros = FiltrosCaptura.capturar_parametros_request()
+            
+            # Formata para o Metabase
+            parametros_metabase = FiltrosCaptura.formatar_para_metabase(filtros)
+            
+            print(f"\n🎯 [NATIVE API] Usando API nativa do Metabase")
+            print(f"   Question ID: {question_id}")
+            print(f"   Filtros: {len(filtros)}")
+            
+            # Método a usar
+            method = request.args.get('method', 'card')  # 'card' ou 'dataset'
+            
+            start_time = time.time()
+            
+            if method == 'dataset':
+                # Tenta usar API Dataset (mais complexa mas potencialmente mais rápida)
+                try:
+                    resultado_dataset = metabase_dataset_client.executar_dataset_query(
+                        question_id, 
+                        parametros_metabase
+                    )
+                    
+                    # Converte para formato de linha
+                    dados = metabase_dataset_client.converter_para_formato_linha(resultado_dataset)
+                    
+                except Exception as e:
+                    print(f"⚠️  [NATIVE API] Dataset API falhou, usando Card API: {str(e)}")
+                    # Fallback para Card API
+                    dados = metabase_dataset_client.executar_card_query(
+                        question_id,
+                        parametros_metabase
+                    )
+            else:
+                # Usa Card API (mais simples e confiável)
+                dados = metabase_dataset_client.executar_card_query(
+                    question_id,
+                    parametros_metabase
+                )
+            
+            elapsed = time.time() - start_time
+            
+            print(f"✅ [NATIVE API] Total: {len(dados):,} linhas em {elapsed:.2f}s")
+            print(f"   Método usado: {method}")
+            
+            return jsonify(dados)
+                
+        except Exception as e:
+            import traceback
+            print(f"\n❌ [NATIVE API] Erro: {str(e)}")
+            print(traceback.format_exc())
+            
+            return jsonify({
+                'error': str(e),
+                'tipo': 'erro_native_api',
+                'question_id': question_id
+            }), 500
+
+
+
+
+
+
     
     @app.route('/api/question/<int:question_id>/info', methods=['GET'])
     def api_question_info(question_id):

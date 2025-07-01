@@ -278,6 +278,130 @@ class DataLoader {
       baseUrl: this.baseUrl
     };
   }
+
+
+/**
+   * Carrega dados usando API nativa do Metabase (melhor performance)
+   */
+  async loadDataNative(questionId, filtros, method = 'card') {
+    // Verifica se já está carregando
+    if (this.isLoading) {
+      Utils.log('⚠️ Carregamento já em andamento');
+      return null;
+    }
+
+    // Cancela requisição anterior se houver
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+
+    this.isLoading = true;
+    this.abortController = new AbortController();
+
+    try {
+      // Monta URL
+      const url = this.buildUrl(questionId, filtros, 'native', method);
+      
+      // Verifica cache
+      const cached = this.getFromCache(url);
+      if (cached) {
+        Utils.log('📦 Dados do cache (native)');
+        return cached;
+      }
+
+      // Faz requisição
+      const startTime = performance.now();
+      Utils.log(`📡 Buscando dados (API Native - ${method})...`);
+
+      const response = await fetch(url, {
+        signal: this.abortController.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const elapsed = Utils.getElapsedTime(startTime);
+
+      Utils.log(`✅ [Native ${method}] ${data.length} linhas em ${elapsed}s`);
+      
+      // Compara com método direto
+      const improvement = this.lastDirectTime ? 
+        ((this.lastDirectTime - parseFloat(elapsed)) / this.lastDirectTime * 100).toFixed(1) : 
+        'N/A';
+      
+      if (improvement !== 'N/A' && improvement > 0) {
+        Utils.log(`🚀 Melhoria de performance: ${improvement}%`);
+      }
+
+      // Adiciona ao cache
+      this.addToCache(url, data);
+
+      return data;
+
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        Utils.log('🛑 Requisição cancelada');
+        return null;
+      }
+      
+      Utils.log('❌ Erro ao carregar dados (native):', error);
+      throw error;
+      
+    } finally {
+      this.isLoading = false;
+      this.abortController = null;
+    }
+  }
+
+  /**
+   * Atualiza buildUrl para suportar endpoint native
+   */
+  buildUrl(questionId, filtros, endpoint = 'direct', method = null) {
+    let apiEndpoint;
+    
+    switch(endpoint) {
+      case 'native':
+        apiEndpoint = '/api/query/native';
+        break;
+      case 'direct':
+        apiEndpoint = '/api/query/direct';
+        break;
+      case 'metabase':
+        apiEndpoint = '/api/query';
+        break;
+      default:
+        apiEndpoint = '/api/query/direct';
+    }
+    
+    const params = new URLSearchParams();
+    params.append('question_id', questionId);
+
+    // Adiciona método se for native
+    if (endpoint === 'native' && method) {
+      params.append('method', method);
+    }
+
+    // Adiciona database e schema se disponíveis
+    const urlParams = Utils.getUrlParams();
+    if (urlParams.database) params.append('database', urlParams.database);
+    if (urlParams.schema) params.append('schema', urlParams.schema);
+
+    // Adiciona filtros
+    Object.entries(filtros).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        value.forEach(v => params.append(key, v));
+      } else {
+        params.append(key, value);
+      }
+    });
+
+    return `${this.baseUrl}${apiEndpoint}?${params.toString()}`;
+  }
+
+
+
 }
 
 // Instância global
