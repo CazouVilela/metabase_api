@@ -190,9 +190,56 @@ class VirtualTable {
     this.container.innerHTML = `
       <div class="loading-container">
         <div class="spinner"></div>
-        <p>${message}</p>
+        <p class="loading-message">${message}</p>
+        <div class="loading-progress" style="display: none;">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: 0%"></div>
+          </div>
+        </div>
       </div>
     `;
+  }
+
+  /**
+   * Atualiza progresso do loading
+   */
+  updateLoadingProgress(message, percent) {
+    const messageEl = this.container.querySelector('.loading-message');
+    const progressEl = this.container.querySelector('.loading-progress');
+    const fillEl = this.container.querySelector('.progress-fill');
+    
+    if (messageEl) messageEl.textContent = message;
+    if (progressEl) progressEl.style.display = 'block';
+    if (fillEl) fillEl.style.width = `${percent}%`;
+  }
+
+  /**
+   * Atualiza dados mantendo a estrutura (para streaming)
+   */
+  updateData(newData) {
+    this.data = newData;
+    
+    // Se usando Clusterize, atualiza
+    if (this.clusterize) {
+      const rows = newData.map(row => this.createRowHtml(row));
+      this.clusterize.update(rows);
+      
+      // Atualiza contador
+      this.updateRowCount(newData.length);
+    } else {
+      // Re-renderiza completo se não estiver usando virtualização
+      this.render(newData);
+    }
+  }
+
+  /**
+   * Atualiza apenas o contador de linhas
+   */
+  updateRowCount(count) {
+    const countEl = this.container.querySelector('.record-count strong');
+    if (countEl) {
+      countEl.textContent = Utils.formatNumber(count);
+    }
   }
 
   /**

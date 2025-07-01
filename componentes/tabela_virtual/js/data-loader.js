@@ -115,6 +115,58 @@ class DataLoader {
   }
 
   /**
+   * Carrega dados com streaming (para datasets grandes)
+   */
+  async loadDataWithStreaming(questionId, filtros, callbacks = {}) {
+    Utils.log('🌊 Usando carregamento com streaming...');
+    
+    return new Promise((resolve, reject) => {
+      // Verifica se streaming loader está disponível
+      if (typeof streamingLoader === 'undefined') {
+        reject(new Error('Streaming loader não está carregado'));
+        return;
+      }
+      
+      // Configura callbacks
+      streamingLoader.onChunk = callbacks.onChunk;
+      streamingLoader.onProgress = callbacks.onProgress;
+      streamingLoader.onError = (error) => {
+        reject(error);
+      };
+      streamingLoader.onComplete = (data, metrics) => {
+        resolve({
+          data,
+          metrics,
+          streaming: true
+        });
+      };
+      
+      // Inicia streaming
+      streamingLoader.startStreaming(questionId, filtros, {
+        chunkSize: 5000
+      });
+    });
+  }
+
+  /**
+   * Decide se deve usar streaming baseado no contexto
+   */
+  async shouldUseStreaming(questionId, filtros) {
+    // Usa streaming se tiver muitos filtros removidos (indica dataset grande)
+    const numFiltros = Object.keys(filtros).length;
+    
+    // Se tem poucos filtros, provavelmente é um dataset grande
+    if (numFiltros < 3) {
+      Utils.log('📊 Poucos filtros detectados, usando streaming');
+      return true;
+    }
+    
+    // Por enquanto, sempre usa modo direto sem streaming
+    // No futuro, pode fazer uma estimativa primeiro
+    return false;
+  }
+
+  /**
    * Obtém dados do cache
    */
   getFromCache(url) {

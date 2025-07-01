@@ -271,6 +271,25 @@ tbody tr:nth-child(even) {
   font-size: 14px;
 }
 
+/* Barra de progresso */
+.loading-progress {
+  max-width: 300px;
+  margin: var(--spacing-md) auto 0;
+}
+
+.progress-bar {
+  height: 6px;
+  background-color: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
 /* ===== Estado Vazio ===== */
 .empty-state {
   text-align: center;
