@@ -222,39 +222,41 @@ def register_routes(app):
 
 
     @app.route('/api/query/native', methods=['GET'])
-    def api_query_native():
-        """API com performance nativa (formato colunar + gzip)"""
-        from api.consulta_direta import consulta_direta
-        import time, json, gzip
-        from flask import Response
+    def api_query_native_performance():
+        """
+        API que replica EXATAMENTE a performance do Metabase nativo
+        Sem chunks, sem streaming - carrega tudo otimizado
+        """
+        from api.native_performance import executar_query_performance_nativa
+        from api.filtros_captura import FiltrosCaptura
     
-        question_id = int(request.args.get('question_id', '51'))
-        start = time.time()
-    
-        # Executa query
-        dados = consulta_direta.executar_consulta_direta_simples(question_id)
-    
-        # Converte para formato colunar
-        if dados and len(dados) > 0:
-            cols = [{'name': k, 'base_type': 'type/Text'} for k in dados[0].keys()]
-            rows = [[item.get(c['name']) for c in cols] for item in dados]
+        try:
+            # Obtém parâmetros
+            question_id = request.args.get('question_id', '51')
+            question_id = int(question_id)
         
-            response_data = {
-                'data': {'cols': cols, 'rows': rows},
-                'row_count': len(rows),
-                'running_time': int((time.time() - start) * 1000)
-            }
+            # Captura filtros
+            filtros = FiltrosCaptura.capturar_parametros_request()
         
-            # Comprime
-            json_str = json.dumps(response_data)
-            compressed = gzip.compress(json_str.encode())
+            print(f"\n🎯 [NATIVE PERFORMANCE] Executando como Metabase nativo")
+            print(f"   Question ID: {question_id}")
+            print(f"   Filtros: {len(filtros)}")
         
-            response = Response(compressed)
-            response.headers['Content-Type'] = 'application/json'
-            response.headers['Content-Encoding'] = 'gzip'
-            return response
-    
-        return jsonify({'error': 'Sem dados'}), 404
+            # Executa com performance nativa
+            return executar_query_performance_nativa(question_id, filtros)
+            
+        except Exception as e:
+            import traceback
+            print(f"\n❌ [NATIVE PERFORMANCE] Erro: {str(e)}")
+            print(traceback.format_exc())
+        
+            return jsonify({
+                'error': str(e),
+                'tipo': 'erro_native_performance',
+                'question_id': question_id
+            }), 500
+
+
 
 
 

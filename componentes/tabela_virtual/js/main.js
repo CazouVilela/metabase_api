@@ -9,7 +9,7 @@ class App {
     this.virtualTable = null;
     this.checkInterval = 1000;
     this.checkTimer = null;
-    this.useStreaming = false;
+    this.useStreaming = false; // NUNCA! Metabase não usa!
     
     // Elementos DOM
     this.elements = {
@@ -29,7 +29,7 @@ class App {
       this.questionId = Utils.getUrlParams().question_id || '51';
       
       // Verifica se deve usar streaming
-      this.useStreaming = Utils.getUrlParams().streaming === 'true';
+      this.useStreaming = false; // IGNORANDO parâmetro - Metabase não usa streaming!
       
       // Cria tabela virtual
       this.virtualTable = new VirtualTable(this.elements.container);
@@ -115,8 +115,8 @@ class App {
       // Mostra loading
       this.virtualTable.renderLoading();
       
-      // Decide se usa streaming baseado no contexto
-      const shouldStream = this.useStreaming || await this.shouldUseStreaming(filtros);
+      // NUNCA usa streaming - Metabase nativo carrega tudo de uma vez!
+      const shouldStream = false; // NUNCA usa streaming - Metabase nativo não usa!
       
       if (shouldStream) {
         // Carregamento com streaming

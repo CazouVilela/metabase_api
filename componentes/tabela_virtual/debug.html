@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Native API</title>
+</head>
+<body>
+    <h1>Debug Native API</h1>
+    <button onclick="test()">Testar</button>
+    <pre id="result"></pre>
+    
+    <script>
+    async function test() {
+        const result = document.getElementById('result');
+        result.textContent = 'Carregando...';
+        
+        try {
+            const response = await fetch('/api/query/native?question_id=51');
+            const data = await response.json();
+            
+            if (data.data && data.data.rows) {
+                result.textContent = `✅ SUCCESS!\n`;
+                result.textContent += `Rows: ${data.data.rows.length}\n`;
+                result.textContent += `Cols: ${data.data.cols.length}\n`;
+                result.textContent += `\nPrimeira linha:\n`;
+                result.textContent += JSON.stringify(data.data.rows[0], null, 2);
+            } else {
+                result.textContent = '❌ Formato inesperado:\n' + JSON.stringify(data, null, 2);
+            }
+        } catch (e) {
+            result.textContent = '❌ Erro: ' + e.message;
+        }
+    }
+    </script>
+</body>
+</html>

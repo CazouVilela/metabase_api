@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste Native Performance</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        button { padding: 10px 20px; margin: 5px; }
+        #result { margin-top: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Teste Native Performance</h1>
+    
+    <button onclick="testNative()">Testar Native API</button>
+    <button onclick="testDirect()">Testar Direct API</button>
+    
+    <div id="result"></div>
+    
+    <script>
+        async function testNative() {
+            const result = document.getElementById('result');
+            result.innerHTML = 'Carregando Native...';
+            
+            const start = performance.now();
+            
+            try {
+                const response = await fetch('/api/query/native?question_id=51');
+                const data = await response.json();
+                const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+                
+                if (data.data && data.data.rows) {
+                    result.innerHTML = `<div class="success">✅ Native: ${data.data.rows.length} linhas em ${elapsed}s</div>`;
+                } else {
+                    result.innerHTML = `<div class="error">❌ Formato inesperado</div>`;
+                    console.log(data);
+                }
+            } catch (e) {
+                result.innerHTML = `<div class="error">❌ Erro: ${e.message}</div>`;
+            }
+        }
+        
+        async function testDirect() {
+            const result = document.getElementById('result');
+            result.innerHTML = 'Carregando Direct...';
+            
+            const start = performance.now();
+            
+            try {
+                const response = await fetch('/api/query/direct?question_id=51');
+                const data = await response.json();
+                const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+                
+                result.innerHTML = `<div class="success">✅ Direct: ${data.length} linhas em ${elapsed}s</div>`;
+            } catch (e) {
+                result.innerHTML = `<div class="error">❌ Erro: ${e.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

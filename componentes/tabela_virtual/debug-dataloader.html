@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug DataLoader</title>
+</head>
+<body>
+    <h1>Debug DataLoader</h1>
+    <button onclick="testLoad()">Testar Carregamento</button>
+    <pre id="log"></pre>
+    
+    <script>
+        const log = (msg) => {
+            document.getElementById('log').textContent += msg + '\n';
+        };
+        
+        log('=== VERIFICANDO SCRIPTS ===');
+        
+        // Lista todos os scripts
+        const scripts = document.querySelectorAll('script[src]');
+        scripts.forEach(s => {
+            log('Script: ' + s.src);
+        });
+        
+        async function testLoad() {
+            log('\n=== CARREGANDO data-loader.js ===');
+            
+            try {
+                const response = await fetch('js/data-loader.js');
+                log('Status: ' + response.status);
+                
+                const text = await response.text();
+                log('Tamanho: ' + text.length + ' bytes');
+                log('Primeira linha: ' + text.split('\n')[0]);
+                
+                // Tenta executar
+                eval(text);
+                
+                log('\nApós execução:');
+                log('DataLoader tipo: ' + typeof DataLoader);
+                log('dataLoader tipo: ' + typeof dataLoader);
+                
+                if (typeof dataLoader !== 'undefined') {
+                    log('\n✅ SUCESSO! dataLoader existe!');
+                    log('Stats: ' + JSON.stringify(dataLoader.getStats()));
+                }
+                
+            } catch (e) {
+                log('\n❌ ERRO: ' + e.message);
+                log('Stack: ' + e.stack);
+            }
+        }
+    </script>
+    
+    <!-- Carrega scripts na ordem correta -->
+    <script src="js/utils.js"></script>
+    <script src="js/filtros.js"></script>
+    <script src="js/data-loader.js"></script>
+    
+    <script>
+        // Verifica após carregamento
+        window.onload = () => {
+            log('\n=== APÓS CARREGAMENTO ===');
+            log('Utils: ' + typeof Utils);
+            log('DataLoader: ' + typeof DataLoader);
+            log('dataLoader: ' + typeof dataLoader);
+        };
+    </script>
+</body>
+</html>

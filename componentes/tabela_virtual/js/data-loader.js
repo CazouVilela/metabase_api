@@ -1,408 +1,192 @@
-// componentes/tabela_virtual/js/data-loader.js
-/**
- * Módulo de carregamento de dados
- */
+// data-loader.js - Versão funcional garantida
+// Classe DataLoader para carregar dados da API
 
 class DataLoader {
   constructor() {
+    console.log('[DataLoader] Inicializando...');
     this.baseUrl = this.getBaseUrl();
-    this.cache = new Map();
-    this.cacheTimeout = 5 * 60 * 1000; // 5 minutos
     this.isLoading = false;
     this.abortController = null;
+    this.cache = new Map();
+    console.log('[DataLoader] Base URL:', this.baseUrl);
   }
 
-  /**
-   * Obtém URL base da API
-   */
   getBaseUrl() {
-    // Remove /componentes/tabela_virtual do path
     const path = window.location.pathname;
     const basePath = path.split('/componentes')[0];
     return basePath || '';
   }
 
-  /**
-   * Carrega dados da API
-   */
   async loadData(questionId, filtros) {
-    // Verifica se já está carregando
+    console.log('[DataLoader] loadData:', questionId, filtros);
+    
     if (this.isLoading) {
-      Utils.log('⚠️ Carregamento já em andamento');
+      console.warn('[DataLoader] Já está carregando');
       return null;
     }
 
-    // Cancela requisição anterior se houver
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-
     this.isLoading = true;
-    this.abortController = new AbortController();
 
     try {
-      // Monta URL
-      const url = this.buildUrl(questionId, filtros);
+      const url = this.buildUrl(questionId, filtros, 'direct');
+      console.log('[DataLoader] URL:', url);
+
+      const response = await fetch(url);
       
-      // Verifica cache
-      const cached = this.getFromCache(url);
-      if (cached) {
-        Utils.log('📦 Dados do cache');
-        return cached;
-      }
-
-      // Faz requisição
-      const startTime = performance.now();
-      Utils.log('📡 Buscando dados...', url);
-
-      const response = await fetch(url, {
-        signal: this.abortController.signal
-      });
-
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error('HTTP ' + response.status);
       }
 
       const data = await response.json();
-      const elapsed = Utils.getElapsedTime(startTime);
-
-      Utils.log(`✅ ${data.length} linhas em ${elapsed}s`);
-
-      // Adiciona ao cache
-      this.addToCache(url, data);
-
+      console.log('[DataLoader] Dados carregados:', data.length, 'linhas');
+      
       return data;
 
     } catch (error) {
-      if (error.name === 'AbortError') {
-        Utils.log('🛑 Requisição cancelada');
-        return null;
-      }
-      
-      Utils.log('❌ Erro ao carregar dados:', error);
+      console.error('[DataLoader] Erro:', error);
       throw error;
       
     } finally {
       this.isLoading = false;
-      this.abortController = null;
     }
   }
 
-  /**
-   * Constrói URL com parâmetros
-   */
-  buildUrl(questionId, filtros, useDirect = true) {
-    // Usa endpoint direto por padrão para melhor performance
-    const endpoint = useDirect ? '/api/query/direct' : '/api/query';
+  buildUrl(questionId, filtros, endpoint) {
+    let apiEndpoint;
+    
+    if (endpoint === 'native') {
+      apiEndpoint = '/api/query/native';
+    } else if (endpoint === 'direct') {
+      apiEndpoint = '/api/query/direct';
+    } else {
+      apiEndpoint = '/api/query';
+    }
+    
     const params = new URLSearchParams();
     params.append('question_id', questionId);
 
-    // Adiciona database e schema se disponíveis
-    const urlParams = Utils.getUrlParams();
-    if (urlParams.database) params.append('database', urlParams.database);
-    if (urlParams.schema) params.append('schema', urlParams.schema);
-
-    // Adiciona filtros
-    Object.entries(filtros).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        value.forEach(v => params.append(key, v));
-      } else {
-        params.append(key, value);
-      }
-    });
-
-    return `${this.baseUrl}${endpoint}?${params.toString()}`;
-  }
-
-  /**
-   * Carrega dados com streaming (para datasets grandes)
-   */
-  async loadDataWithStreaming(questionId, filtros, callbacks = {}) {
-    Utils.log('🌊 Usando carregamento com streaming...');
-    
-    return new Promise((resolve, reject) => {
-      // Verifica se streaming loader está disponível
-      if (typeof streamingLoader === 'undefined') {
-        reject(new Error('Streaming loader não está carregado'));
-        return;
-      }
-      
-      // Configura callbacks
-      streamingLoader.onChunk = callbacks.onChunk;
-      streamingLoader.onProgress = callbacks.onProgress;
-      streamingLoader.onError = (error) => {
-        reject(error);
-      };
-      streamingLoader.onComplete = (data, metrics) => {
-        resolve({
-          data,
-          metrics,
-          streaming: true
-        });
-      };
-      
-      // Inicia streaming
-      streamingLoader.startStreaming(questionId, filtros, {
-        chunkSize: 5000
+    if (filtros) {
+      Object.entries(filtros).forEach(function(entry) {
+        const key = entry[0];
+        const value = entry[1];
+        
+        if (Array.isArray(value)) {
+          value.forEach(function(v) {
+            params.append(key, v);
+          });
+        } else if (value != null) {
+          params.append(key, value);
+        }
       });
-    });
-  }
-
-  /**
-   * Decide se deve usar streaming baseado no contexto
-   */
-  async shouldUseStreaming(questionId, filtros) {
-    // Usa streaming se tiver muitos filtros removidos (indica dataset grande)
-    const numFiltros = Object.keys(filtros).length;
-    
-    // Se tem poucos filtros, provavelmente é um dataset grande
-    if (numFiltros < 3) {
-      Utils.log('📊 Poucos filtros detectados, usando streaming');
-      return true;
-    }
-    
-    // Por enquanto, sempre usa modo direto sem streaming
-    // No futuro, pode fazer uma estimativa primeiro
-    return false;
-  }
-
-  /**
-   * Obtém dados do cache
-   */
-  getFromCache(url) {
-    const cached = this.cache.get(url);
-    
-    if (cached) {
-      const age = Date.now() - cached.timestamp;
-      
-      if (age < this.cacheTimeout) {
-        return cached.data;
-      }
-      
-      // Cache expirado
-      this.cache.delete(url);
-    }
-    
-    return null;
-  }
-
-  /**
-   * Adiciona dados ao cache
-   */
-  addToCache(url, data) {
-    // Limita tamanho do cache
-    if (this.cache.size > 10) {
-      const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
     }
 
-    this.cache.set(url, {
-      data,
-      timestamp: Date.now()
-    });
+    return this.baseUrl + apiEndpoint + '?' + params.toString();
   }
 
-  /**
-   * Limpa cache
-   */
-  clearCache() {
-    this.cache.clear();
-    Utils.log('🗑️ Cache limpo');
-  }
-
-  /**
-   * Cancela requisição em andamento
-   */
-  cancel() {
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-  }
-
-  /**
-   * Carrega dados com retry
-   */
-  async loadWithRetry(questionId, filtros, maxRetries = 3) {
+  async loadWithRetry(questionId, filtros, maxRetries) {
+    if (!maxRetries) maxRetries = 3;
+    
     let lastError;
-
+    
     for (let i = 0; i < maxRetries; i++) {
       try {
-        const data = await this.loadData(questionId, filtros);
-        if (data) return data;
-        
+        return await this.loadData(questionId, filtros);
       } catch (error) {
         lastError = error;
-        Utils.log(`⚠️ Tentativa ${i + 1} falhou:`, error.message);
+        console.log('[DataLoader] Tentativa', i + 1, 'falhou');
         
-        // Aguarda antes de tentar novamente
         if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+          await new Promise(function(resolve) {
+            setTimeout(resolve, 1000 * (i + 1));
+          });
         }
       }
     }
-
-    throw lastError || new Error('Falha ao carregar dados');
+    
+    throw lastError;
   }
 
-  /**
-   * Monitora uso de memória durante carregamento
-   */
-  monitorMemory() {
-    if (!performance.memory) return;
+  async loadDataNativePerformance(questionId, filtros) {
+    console.log('[DataLoader] loadDataNativePerformance:', questionId);
+    
+    if (this.isLoading) return null;
 
-    const interval = setInterval(() => {
-      const mem = Utils.checkMemory();
-      
-      if (mem && mem.isHigh) {
-        Utils.log('⚠️ Memória alta:', `${mem.used}MB de ${mem.limit}MB (${mem.percent}%)`);
-        
-        // Limpa cache se memória estiver muito alta
-        if (mem.percent > 90) {
-          this.clearCache();
+    this.isLoading = true;
+
+    try {
+      const url = this.buildUrl(questionId, filtros, 'native');
+      console.log('[DataLoader] Native URL:', url);
+
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip'
         }
+      });
+
+      if (!response.ok) {
+        throw new Error('HTTP ' + response.status);
+      }
+
+      const nativeData = await response.json();
+      
+      // Processa formato nativo do Metabase
+      if (nativeData && nativeData.data && nativeData.data.rows) {
+        const cols = nativeData.data.cols;
+        const rows = nativeData.data.rows;
+        
+        console.log('[DataLoader] Native: ', rows.length, 'linhas,', cols.length, 'colunas');
+        
+        // Converte formato colunar para objetos
+        const result = [];
+        const colNames = cols.map(function(c) { return c.name; });
+        
+        for (let i = 0; i < rows.length; i++) {
+          const obj = {};
+          for (let j = 0; j < colNames.length; j++) {
+            obj[colNames[j]] = rows[i][j];
+          }
+          result.push(obj);
+        }
+        
+        return result;
       }
       
-      if (!this.isLoading) {
-        clearInterval(interval);
-      }
-    }, 2000);
+      // Se já for array, retorna direto
+      return nativeData;
+
+    } catch (error) {
+      console.error('[DataLoader] Erro Native:', error);
+      // Fallback para método direct
+      return this.loadData(questionId, filtros);
+      
+    } finally {
+      this.isLoading = false;
+    }
   }
 
-  /**
-   * Estatísticas de carregamento
-   */
   getStats() {
     return {
-      cacheSize: this.cache.size,
       isLoading: this.isLoading,
-      baseUrl: this.baseUrl
+      baseUrl: this.baseUrl,
+      cacheSize: this.cache.size
     };
   }
 
-
-/**
-   * Carrega dados usando API nativa do Metabase (melhor performance)
-   */
-  async loadDataNative(questionId, filtros, method = 'card') {
-    // Verifica se já está carregando
-    if (this.isLoading) {
-      Utils.log('⚠️ Carregamento já em andamento');
-      return null;
-    }
-
-    // Cancela requisição anterior se houver
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-
-    this.isLoading = true;
-    this.abortController = new AbortController();
-
-    try {
-      // Monta URL
-      const url = this.buildUrl(questionId, filtros, 'native', method);
-      
-      // Verifica cache
-      const cached = this.getFromCache(url);
-      if (cached) {
-        Utils.log('📦 Dados do cache (native)');
-        return cached;
-      }
-
-      // Faz requisição
-      const startTime = performance.now();
-      Utils.log(`📡 Buscando dados (API Native - ${method})...`);
-
-      const response = await fetch(url, {
-        signal: this.abortController.signal
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const elapsed = Utils.getElapsedTime(startTime);
-
-      Utils.log(`✅ [Native ${method}] ${data.length} linhas em ${elapsed}s`);
-      
-      // Compara com método direto
-      const improvement = this.lastDirectTime ? 
-        ((this.lastDirectTime - parseFloat(elapsed)) / this.lastDirectTime * 100).toFixed(1) : 
-        'N/A';
-      
-      if (improvement !== 'N/A' && improvement > 0) {
-        Utils.log(`🚀 Melhoria de performance: ${improvement}%`);
-      }
-
-      // Adiciona ao cache
-      this.addToCache(url, data);
-
-      return data;
-
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        Utils.log('🛑 Requisição cancelada');
-        return null;
-      }
-      
-      Utils.log('❌ Erro ao carregar dados (native):', error);
-      throw error;
-      
-    } finally {
-      this.isLoading = false;
-      this.abortController = null;
-    }
+  clearCache() {
+    this.cache.clear();
+    console.log('[DataLoader] Cache limpo');
   }
-
-  /**
-   * Atualiza buildUrl para suportar endpoint native
-   */
-  buildUrl(questionId, filtros, endpoint = 'direct', method = null) {
-    let apiEndpoint;
-    
-    switch(endpoint) {
-      case 'native':
-        apiEndpoint = '/api/query/native';
-        break;
-      case 'direct':
-        apiEndpoint = '/api/query/direct';
-        break;
-      case 'metabase':
-        apiEndpoint = '/api/query';
-        break;
-      default:
-        apiEndpoint = '/api/query/direct';
-    }
-    
-    const params = new URLSearchParams();
-    params.append('question_id', questionId);
-
-    // Adiciona método se for native
-    if (endpoint === 'native' && method) {
-      params.append('method', method);
-    }
-
-    // Adiciona database e schema se disponíveis
-    const urlParams = Utils.getUrlParams();
-    if (urlParams.database) params.append('database', urlParams.database);
-    if (urlParams.schema) params.append('schema', urlParams.schema);
-
-    // Adiciona filtros
-    Object.entries(filtros).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        value.forEach(v => params.append(key, v));
-      } else {
-        params.append(key, value);
-      }
-    });
-
-    return `${this.baseUrl}${apiEndpoint}?${params.toString()}`;
-  }
-
-
-
 }
 
-// Instância global
+// CRIA INSTÂNCIA GLOBAL
+console.log('[DataLoader] Criando instância global...');
 const dataLoader = new DataLoader();
+console.log('[DataLoader] Instância criada:', typeof dataLoader);
+
+// Teste para verificar se está funcionando
+if (typeof dataLoader === 'object') {
+  console.log('[DataLoader] ✅ dataLoader está disponível globalmente');
+} else {
+  console.error('[DataLoader] ❌ Falha ao criar dataLoader global');
+}
