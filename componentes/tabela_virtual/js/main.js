@@ -1,7 +1,7 @@
 // componentes/tabela_virtual/js/main.js
 /**
- * Arquivo principal - coordena todos os módulos
- * Versão otimizada usando apenas Native Performance API
+ * Arquivo principal - Versão Otimizada
+ * Usa apenas Native Performance
  */
 
 class App {
@@ -22,7 +22,7 @@ class App {
    * Inicializa a aplicação
    */
   async init() {
-    Utils.log('🚀 Iniciando aplicação...');
+    Utils.log('🚀 Iniciando aplicação (Native Performance)...');
     
     try {
       // Obtém ID da questão
@@ -83,7 +83,7 @@ class App {
   }
 
   /**
-   * Carrega dados usando Native Performance API
+   * Carrega dados usando Native Performance
    */
   async loadData(motivo = 'manual') {
     try {
@@ -104,27 +104,10 @@ class App {
       // Mostra loading
       this.virtualTable.renderLoading();
       
-      // Carrega dados com Native Performance API
-      await this.loadDataNativePerformance(filtros);
+      const startTime = performance.now();
       
-    } catch (error) {
-      Utils.log('❌ Erro ao carregar dados:', error);
-      this.virtualTable.renderError(error);
-    }
-  }
-
-  /**
-   * Carregamento com Native Performance API
-   * Usa formato colunar e compressão como Metabase nativo
-   */
-  async loadDataNativePerformance(filtros) {
-    const startTime = performance.now();
-    
-    try {
-      Utils.log('🚀 Usando Native Performance API...');
-      
-      // Usa apenas o método mais rápido
-      const dados = await dataLoader.loadDataNativePerformance(this.questionId, filtros);
+      // Carrega dados com Native Performance
+      const dados = await dataLoader.loadWithRetry(this.questionId, filtros);
       
       if (!dados) {
         this.virtualTable.renderEmpty();
@@ -143,13 +126,10 @@ class App {
         Utils.log(`⏱️  Tempo de renderização: ${renderTime.toFixed(2)}s`);
         Utils.log(`⏱️  TEMPO TOTAL: ${(loadTime + renderTime).toFixed(2)}s`);
         
-        // Mostra estatísticas
-        Utils.showNotification(
-          `✅ ${dados.length.toLocaleString('pt-BR')} linhas em ${(loadTime + renderTime).toFixed(1)}s`,
-          'success',
-          3000
-        );
-        
+        // Monitora memória se muitos dados
+        if (dados.length > 10000) {
+          this.monitorMemory();
+        }
       } else if (dados.error) {
         throw new Error(dados.error);
       } else {
@@ -157,9 +137,24 @@ class App {
       }
       
     } catch (error) {
-      // Se falhar, mostra erro
-      Utils.log('❌ Erro no Native Performance:', error);
-      throw error;
+      Utils.log('❌ Erro ao carregar dados:', error);
+      this.virtualTable.renderError(error);
+    }
+  }
+
+  /**
+   * Monitora uso de memória
+   */
+  monitorMemory() {
+    const mem = Utils.checkMemory();
+    
+    if (mem && mem.isHigh) {
+      Utils.log('⚠️ Memória alta:', `${mem.used}MB de ${mem.limit}MB (${mem.percent}%)`);
+      
+      // Limpa cache se memória estiver muito alta
+      if (mem.percent > 90) {
+        dataLoader.clearCache();
+      }
     }
   }
 
@@ -225,7 +220,7 @@ class App {
       tabela: this.virtualTable.getStats(),
       loader: dataLoader.getStats(),
       memoria: Utils.checkMemory(),
-      metodo: 'Native Performance API'
+      performance: 'Native (Otimizado)'
     };
     
     return stats;
@@ -241,7 +236,6 @@ class App {
       this.virtualTable.destroy();
     }
     
-    dataLoader.cancel();
     dataLoader.clearCache();
   }
 }

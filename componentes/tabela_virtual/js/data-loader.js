@@ -1,14 +1,14 @@
-// data-loader.js - Versão funcional garantida
-// Classe DataLoader para carregar dados da API
+// data-loader.js - Versão Otimizada (Native Only)
+// Usa apenas o método Native Performance
 
 class DataLoader {
   constructor() {
-    console.log('[DataLoader] Inicializando...');
+    console.log('[DataLoader] Inicializando (Native Performance)...');
     this.baseUrl = this.getBaseUrl();
     this.isLoading = false;
     this.abortController = null;
     this.cache = new Map();
-    console.log('[DataLoader] Base URL:', this.baseUrl);
+    this.cacheTimeout = 5 * 60 * 1000; // 5 minutos
   }
 
   getBaseUrl() {
@@ -17,8 +17,11 @@ class DataLoader {
     return basePath || '';
   }
 
+  /**
+   * Carrega dados usando APENAS o método Native
+   */
   async loadData(questionId, filtros) {
-    console.log('[DataLoader] loadData:', questionId, filtros);
+    console.log('[DataLoader] loadData (Native):', questionId, filtros);
     
     if (this.isLoading) {
       console.warn('[DataLoader] Já está carregando');
@@ -28,19 +31,25 @@ class DataLoader {
     this.isLoading = true;
 
     try {
-      const url = this.buildUrl(questionId, filtros, 'direct');
-      console.log('[DataLoader] URL:', url);
+      // SEMPRE usa endpoint native/query
+      const url = this.buildUrl(questionId, filtros);
+      console.log('[DataLoader] URL Native:', url);
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip'
+        }
+      });
       
       if (!response.ok) {
         throw new Error('HTTP ' + response.status);
       }
 
-      const data = await response.json();
-      console.log('[DataLoader] Dados carregados:', data.length, 'linhas');
+      const nativeData = await response.json();
       
-      return data;
+      // Processa formato nativo do Metabase
+      return this.processNativeResponse(nativeData);
 
     } catch (error) {
       console.error('[DataLoader] Erro:', error);
@@ -51,16 +60,47 @@ class DataLoader {
     }
   }
 
-  buildUrl(questionId, filtros, endpoint) {
-    let apiEndpoint;
-    
-    if (endpoint === 'native') {
-      apiEndpoint = '/api/query/native';
-    } else if (endpoint === 'direct') {
-      apiEndpoint = '/api/query/direct';
-    } else {
-      apiEndpoint = '/api/query';
+  /**
+   * Processa resposta no formato nativo do Metabase
+   */
+  processNativeResponse(nativeData) {
+    // Se tem o formato nativo (colunar)
+    if (nativeData && nativeData.data && nativeData.data.rows) {
+      const cols = nativeData.data.cols;
+      const rows = nativeData.data.rows;
+      
+      console.log('[DataLoader] Native: ', rows.length, 'linhas,', cols.length, 'colunas');
+      
+      // Converte formato colunar para objetos
+      const result = [];
+      const colNames = cols.map(function(c) { return c.name; });
+      
+      for (let i = 0; i < rows.length; i++) {
+        const obj = {};
+        for (let j = 0; j < colNames.length; j++) {
+          obj[colNames[j]] = rows[i][j];
+        }
+        result.push(obj);
+      }
+      
+      return result;
     }
+    
+    // Se já for array de objetos, retorna direto
+    if (Array.isArray(nativeData)) {
+      return nativeData;
+    }
+    
+    console.error('[DataLoader] Formato de resposta inesperado:', nativeData);
+    return [];
+  }
+
+  /**
+   * Constrói URL - SEMPRE para endpoint native
+   */
+  buildUrl(questionId, filtros) {
+    // SEMPRE usa /api/query (que agora é native)
+    const apiEndpoint = '/api/query';
     
     const params = new URLSearchParams();
     params.append('question_id', questionId);
@@ -83,6 +123,9 @@ class DataLoader {
     return this.baseUrl + apiEndpoint + '?' + params.toString();
   }
 
+  /**
+   * Carrega com retry
+   */
   async loadWithRetry(questionId, filtros, maxRetries) {
     if (!maxRetries) maxRetries = 3;
     
@@ -106,87 +149,63 @@ class DataLoader {
     throw lastError;
   }
 
-  async loadDataNativePerformance(questionId, filtros) {
-    console.log('[DataLoader] loadDataNativePerformance:', questionId);
+  /**
+   * Obtém dados do cache
+   */
+  getFromCache(url) {
+    const cached = this.cache.get(url);
     
-    if (this.isLoading) return null;
-
-    this.isLoading = true;
-
-    try {
-      const url = this.buildUrl(questionId, filtros, 'native');
-      console.log('[DataLoader] Native URL:', url);
-
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Encoding': 'gzip'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('HTTP ' + response.status);
-      }
-
-      const nativeData = await response.json();
+    if (cached) {
+      const age = Date.now() - cached.timestamp;
       
-      // Processa formato nativo do Metabase
-      if (nativeData && nativeData.data && nativeData.data.rows) {
-        const cols = nativeData.data.cols;
-        const rows = nativeData.data.rows;
-        
-        console.log('[DataLoader] Native: ', rows.length, 'linhas,', cols.length, 'colunas');
-        
-        // Converte formato colunar para objetos
-        const result = [];
-        const colNames = cols.map(function(c) { return c.name; });
-        
-        for (let i = 0; i < rows.length; i++) {
-          const obj = {};
-          for (let j = 0; j < colNames.length; j++) {
-            obj[colNames[j]] = rows[i][j];
-          }
-          result.push(obj);
-        }
-        
-        return result;
+      if (age < this.cacheTimeout) {
+        console.log('📦 Dados do cache');
+        return cached.data;
       }
       
-      // Se já for array, retorna direto
-      return nativeData;
-
-    } catch (error) {
-      console.error('[DataLoader] Erro Native:', error);
-      // Fallback para método direct
-      return this.loadData(questionId, filtros);
-      
-    } finally {
-      this.isLoading = false;
+      this.cache.delete(url);
     }
+    
+    return null;
   }
 
+  /**
+   * Adiciona ao cache
+   */
+  addToCache(url, data) {
+    if (this.cache.size > 10) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+
+    this.cache.set(url, {
+      data,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Estatísticas
+   */
   getStats() {
     return {
       isLoading: this.isLoading,
       baseUrl: this.baseUrl,
-      cacheSize: this.cache.size
+      cacheSize: this.cache.size,
+      method: 'native-performance'
     };
   }
 
+  /**
+   * Limpa cache
+   */
   clearCache() {
     this.cache.clear();
     console.log('[DataLoader] Cache limpo');
   }
 }
 
-// CRIA INSTÂNCIA GLOBAL
-console.log('[DataLoader] Criando instância global...');
+// Cria instância global
+console.log('[DataLoader] Criando instância global (Native)...');
 const dataLoader = new DataLoader();
-console.log('[DataLoader] Instância criada:', typeof dataLoader);
-
-// Teste para verificar se está funcionando
-if (typeof dataLoader === 'object') {
-  console.log('[DataLoader] ✅ dataLoader está disponível globalmente');
-} else {
-  console.error('[DataLoader] ❌ Falha ao criar dataLoader global');
-}
+console.log('[DataLoader] ✅ Pronto para usar com Native Performance');
