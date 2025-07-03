@@ -1,26 +1,29 @@
 const debugEl = document.getElementById('debug');
 const tableEl = document.getElementById('table-container');
+const filtersDisplayEl = document.getElementById('filters-display');
+const filtersListEl = document.getElementById('filters-list');
 
 const params = new URLSearchParams(window.location.search);
 const questionId = params.get('question_id') || '51';
 
 let lastFilterString = '';
+let externalFilters = null;
+
+window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'dashboard-filters' && typeof event.data.filters === 'object') {
+        externalFilters = event.data.filters;
+        update(externalFilters);
+    }
+});
 
 function getFiltersFromDashboard() {
-    const filters = {};
-    try {
-        const filterEls = window.parent.document.querySelectorAll('.dashboard-filter');
-        filterEls.forEach(el => {
-            const name = el.getAttribute('data-filter');
-            const input = el.querySelector('input, select');
-            if (name && input && input.value) {
-                filters[name] = input.value;
-            }
-        });
-    } catch (e) {
-        console.error('Failed to read filters', e);
+    if (externalFilters) {
+        return externalFilters;
     }
-    return filters;
+    if (typeof window.captureDashboardFilters === 'function') {
+        return window.captureDashboardFilters();
+    }
+    return {};
 }
 
 async function fetchData(filters) {
@@ -55,16 +58,46 @@ function renderTable(data) {
     tableEl.innerHTML = html;
 }
 
-async function update() {
-    const filters = getFiltersFromDashboard();
+function renderFilters(filters) {
+    if (!filtersListEl) return;
+    filtersListEl.innerHTML = '';
+    Object.entries(filters).forEach(([key, value]) => {
+        const item = document.createElement('div');
+        item.className = 'filter-item';
+        const friendly = (window.filterMapping && window.filterMapping[key] && window.filterMapping[key].friendlyName) || key;
+        if (Array.isArray(value)) {
+            item.innerHTML = `<strong>${friendly}:</strong> ${value.length} selecionados`;
+        } else {
+            item.innerHTML = `<strong>${friendly}:</strong> ${value}`;
+        }
+        filtersListEl.appendChild(item);
+    });
+    if (Object.keys(filters).length === 0) {
+        filtersDisplayEl.style.display = 'none';
+    } else {
+        filtersDisplayEl.style.display = 'block';
+    }
+}
+
+async function update(forcedFilters = null) {
+    const filters = forcedFilters || getFiltersFromDashboard();
     const filterString = JSON.stringify(filters);
     if (filterString !== lastFilterString) {
         lastFilterString = filterString;
         const { data, url, status } = await fetchData(filters);
         renderDebug(filters, url, status, data);
         renderTable(data);
+        renderFilters(filters);
     }
 }
 
-setInterval(update, 500);
+if (typeof window.startFilterMonitoring === 'function') {
+    window.startFilterMonitoring((f) => {
+        externalFilters = f;
+        update(f);
+    });
+} else {
+    setInterval(update, 1000);
+}
+
 update();
