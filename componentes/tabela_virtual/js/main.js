@@ -150,7 +150,11 @@ class App {
     try {
       if (useNativeAPI) {
         // Usa API Native (muito mais rápido!)
-        dados = await dataLoader.loadDataNative(this.questionId, filtros, 'dataset');
+        // Ajustado para o novo método loadDataNativePerformance
+        dados = await dataLoader.loadDataNativePerformance(
+          this.questionId,
+          filtros
+        );
       } else {
         // Método antigo (Query direta)
         dados = await dataLoader.loadWithRetry(this.questionId, filtros);

@@ -165,6 +165,11 @@ class DataLoader {
     }
   }
 
+  // Alias para retrocompatibilidade
+  async loadDataNative(questionId, filtros) {
+    return this.loadDataNativePerformance(questionId, filtros);
+  }
+
   getStats() {
     return {
       isLoading: this.isLoading,
