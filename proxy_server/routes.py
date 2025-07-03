@@ -225,15 +225,19 @@ def register_routes(app):
     def api_query_native():
         """API com performance nativa (formato colunar + gzip)"""
         from api.consulta_direta import consulta_direta
+        from api.filtros_captura import FiltrosCaptura
         import time, json, gzip
         from flask import Response
-    
+
         question_id = int(request.args.get('question_id', '51'))
         start = time.time()
-    
-        # Executa query
-        dados = consulta_direta.executar_consulta_direta_simples(question_id)
-    
+
+        # Captura filtros da requisição (suporta múltiplos valores)
+        filtros = FiltrosCaptura.capturar_parametros_request()
+
+        # Executa query com filtros
+        dados = consulta_direta.executar_consulta_direta_simples(question_id, filtros)
+
         # Converte para formato colunar
         if dados and len(dados) > 0:
             cols = [{'name': k, 'base_type': 'type/Text'} for k in dados[0].keys()]
@@ -246,7 +250,7 @@ def register_routes(app):
             }
         
             # Comprime
-            json_str = json.dumps(response_data)
+            json_str = json.dumps(response_data, default=str)
             compressed = gzip.compress(json_str.encode())
         
             response = Response(compressed)
