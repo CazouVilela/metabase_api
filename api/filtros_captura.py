@@ -20,6 +20,20 @@ class FiltrosCaptura:
     
     # Parâmetros especiais que não são filtros
     SPECIAL_PARAMS = ['question_id', 'format', 'limit', 'offset']
+
+    @staticmethod
+    def _decode(valor: str) -> str:
+        """Decodifica valor de query string preservando '+' literal."""
+        if not valor:
+            return ''
+        valor = valor.replace('+', ' ')
+        valor = urllib.parse.unquote(valor)
+        if '%' in valor:
+            try:
+                valor = urllib.parse.unquote(valor)
+            except Exception:
+                pass
+        return valor
     
     @staticmethod
     def capturar_parametros_request() -> Dict[str, Union[str, List[str]]]:
@@ -37,29 +51,44 @@ class FiltrosCaptura:
         if not raw_query:
             return params
         
-        # Processa todos os parâmetros
-        for key in request.args:
-            # Pula parâmetros especiais
+        # Faz parsing manual para preservar caracteres especiais como '+'
+        for pair in raw_query.split('&'):
+            if '=' not in pair:
+                continue
+
+            key, value = pair.split('=', 1)
+
+            key = FiltrosCaptura._decode(key)
             if key in FiltrosCaptura.SPECIAL_PARAMS:
                 continue
-                
-            # Verifica se é um parâmetro multi-valor
+
+            value = FiltrosCaptura._decode(value)
+            if not value.strip():
+                continue
+
             if key in FiltrosCaptura.MULTI_VALUE_PARAMS:
-                values = request.args.getlist(key)
-                # Remove valores vazios
-                values = [v for v in values if v and v.strip()]
-                
-                if values:
-                    if len(values) == 1:
-                        params[key] = values[0]
+                # Suporta múltiplos valores
+                if key in params:
+                    if isinstance(params[key], list):
+                        params[key].append(value)
                     else:
-                        params[key] = values
-            else:
-                # Parâmetro único
-                value = request.args.get(key)
-                if value and value.strip():
+                        params[key] = [params[key], value]
+                else:
                     params[key] = value
-        
+            else:
+                if key in params:
+                    if isinstance(params[key], list):
+                        params[key].append(value)
+                    else:
+                        params[key] = [params[key], value]
+                else:
+                    params[key] = value
+
+        # Converte listas de tamanho 1 para valor único onde aplicável
+        for k, v in list(params.items()):
+            if isinstance(v, list) and len(v) == 1:
+                params[k] = v[0]
+
         return params
     
     @staticmethod
@@ -75,23 +104,35 @@ class FiltrosCaptura:
         """
         params = {}
         
-        # Parse da URL
+        # Parse da URL manualmente para preservar '+'
         parsed = urllib.parse.urlparse(url)
-        query_params = urllib.parse.parse_qs(parsed.query)
-        
-        for key, values in query_params.items():
+        raw_query = parsed.query
+
+        for pair in raw_query.split('&'):
+            if '=' not in pair:
+                continue
+
+            key, value = pair.split('=', 1)
+            key = FiltrosCaptura._decode(key)
             if key in FiltrosCaptura.SPECIAL_PARAMS:
                 continue
-                
-            # Remove valores vazios
-            values = [v for v in values if v and v.strip()]
-            
-            if values:
-                if len(values) == 1:
-                    params[key] = values[0]
+
+            value = FiltrosCaptura._decode(value)
+            if not value.strip():
+                continue
+
+            if key in params:
+                if isinstance(params[key], list):
+                    params[key].append(value)
                 else:
-                    params[key] = values
-        
+                    params[key] = [params[key], value]
+            else:
+                params[key] = value
+
+        for k, v in list(params.items()):
+            if isinstance(v, list) and len(v) == 1:
+                params[k] = v[0]
+
         return params
     
     @staticmethod
