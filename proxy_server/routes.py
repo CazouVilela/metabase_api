@@ -4,11 +4,24 @@ Definição de rotas do servidor proxy
 """
 
 from flask import jsonify, send_from_directory, request, Response
+from datetime import datetime, date
+from decimal import Decimal
 import os
 import json
 import time
 from api.consulta_metabase import consulta_metabase
 from api.filtros_captura import FiltrosCaptura
+
+
+def json_serial(obj):
+    """Serializador JSON para tipos especiais"""
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    elif isinstance(obj, Decimal):
+        return float(obj)
+    elif hasattr(obj, '__dict__'):
+        return str(obj)
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 def register_routes(app):
     """Registra todas as rotas da aplicação"""
@@ -246,7 +259,7 @@ def register_routes(app):
             }
         
             # Comprime
-            json_str = json.dumps(response_data)
+            json_str = json.dumps(response_data, default=json_serial)
             compressed = gzip.compress(json_str.encode())
         
             response = Response(compressed)

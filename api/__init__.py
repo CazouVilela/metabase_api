@@ -11,9 +11,7 @@ Módulos disponíveis:
 - filtros_captura: Captura de filtros do dashboard
 - filtros_normalizacao: Normalização de parâmetros
 - consulta_metabase: Execução de consultas (via API Metabase)
-- processamentoDados_json: Processamento de dados JSON
-- processamentoDados_transformacao: Transformações de dados
-- processamentoDados_agregacao: Agregações e cálculos
+- native_performance: API com performance nativa do Metabase
 """
 
 __version__ = '2.1.0'
@@ -27,10 +25,6 @@ from .consulta_direta import ConsultaDireta, consulta_direta
 from .filtros_captura import FiltrosCaptura
 from .filtros_normalizacao import FiltrosNormalizacao
 from .consulta_metabase import ConsultaMetabase, consulta_metabase
-from .processamentoDados_json import ProcessadorJSON
-from .processamentoDados_transformacao import ProcessadorTransformacao
-from .processamentoDados_agregacao import ProcessadorAgregacao
-from .metabase_dataset import MetabaseDatasetClient, metabase_dataset_client
 
 __all__ = [
     'MetabaseClient',
@@ -44,8 +38,5 @@ __all__ = [
     'FiltrosCaptura',
     'FiltrosNormalizacao',
     'ConsultaMetabase',
-    'consulta_metabase',
-    'ProcessadorJSON',
-    'ProcessadorTransformacao',
-    'ProcessadorAgregacao'
+    'consulta_metabase'
 ]

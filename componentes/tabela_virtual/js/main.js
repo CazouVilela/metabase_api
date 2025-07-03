@@ -1,6 +1,7 @@
 // componentes/tabela_virtual/js/main.js
 /**
  * Arquivo principal - coordena todos os módulos
+ * Versão otimizada usando apenas Native Performance API
  */
 
 class App {
@@ -9,7 +10,6 @@ class App {
     this.virtualTable = null;
     this.checkInterval = 1000;
     this.checkTimer = null;
-    this.useStreaming = false; // NUNCA! Metabase não usa!
     
     // Elementos DOM
     this.elements = {
@@ -27,9 +27,6 @@ class App {
     try {
       // Obtém ID da questão
       this.questionId = Utils.getUrlParams().question_id || '51';
-      
-      // Verifica se deve usar streaming
-      this.useStreaming = false; // IGNORANDO parâmetro - Metabase não usa streaming!
       
       // Cria tabela virtual
       this.virtualTable = new VirtualTable(this.elements.container);
@@ -77,14 +74,6 @@ class App {
         e.preventDefault();
         this.virtualTable.exportToCsv();
       }
-      
-      // Ctrl/Cmd + S: Toggle streaming
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        this.useStreaming = !this.useStreaming;
-        Utils.showNotification(`Streaming ${this.useStreaming ? 'ativado' : 'desativado'}`, 'info');
-        this.loadData('toggle streaming');
-      }
     });
 
     // Observer para mudanças de filtros
@@ -94,7 +83,7 @@ class App {
   }
 
   /**
-   * Carrega dados
+   * Carrega dados usando Native Performance API
    */
   async loadData(motivo = 'manual') {
     try {
@@ -115,16 +104,8 @@ class App {
       // Mostra loading
       this.virtualTable.renderLoading();
       
-      // NUNCA usa streaming - Metabase nativo carrega tudo de uma vez!
-      const shouldStream = false; // NUNCA usa streaming - Metabase nativo não usa!
-      
-      if (shouldStream) {
-        // Carregamento com streaming
-        await this.loadDataWithStreaming(filtros);
-      } else {
-        // Carregamento tradicional
-        await this.loadDataTraditional(filtros);
-      }
+      // Carrega dados com Native Performance API
+      await this.loadDataNativePerformance(filtros);
       
     } catch (error) {
       Utils.log('❌ Erro ao carregar dados:', error);
@@ -133,28 +114,17 @@ class App {
   }
 
   /**
-   * Carregamento tradicional (sem streaming)
+   * Carregamento com Native Performance API
+   * Usa formato colunar e compressão como Metabase nativo
    */
-
-/**
-   * Carregamento tradicional (sem streaming)
-   */
-  async loadDataTraditional(filtros) {
+  async loadDataNativePerformance(filtros) {
     const startTime = performance.now();
     
-    // Por padrão, usa API Native Dataset para melhor performance
-    const useNativeAPI = Utils.getUrlParams().native !== 'false';
-    
-    let dados;
-    
     try {
-      if (useNativeAPI) {
-        // Usa API Native (muito mais rápido!)
-        dados = await dataLoader.loadDataNative(this.questionId, filtros, 'dataset');
-      } else {
-        // Método antigo (Query direta)
-        dados = await dataLoader.loadWithRetry(this.questionId, filtros);
-      }
+      Utils.log('🚀 Usando Native Performance API...');
+      
+      // Usa apenas o método mais rápido
+      const dados = await dataLoader.loadDataNativePerformance(this.questionId, filtros);
       
       if (!dados) {
         this.virtualTable.renderEmpty();
@@ -164,8 +134,7 @@ class App {
       // Renderiza tabela
       if (Array.isArray(dados) && dados.length > 0) {
         const loadTime = (performance.now() - startTime) / 1000;
-        const method = useNativeAPI ? 'Native API' : 'Direct SQL';
-        Utils.log(`⏱️  Tempo de carregamento (${method}): ${loadTime.toFixed(2)}s`);
+        Utils.log(`⏱️  Tempo de carregamento (Native): ${loadTime.toFixed(2)}s`);
         
         const renderStart = performance.now();
         this.virtualTable.render(dados);
@@ -174,153 +143,24 @@ class App {
         Utils.log(`⏱️  Tempo de renderização: ${renderTime.toFixed(2)}s`);
         Utils.log(`⏱️  TEMPO TOTAL: ${(loadTime + renderTime).toFixed(2)}s`);
         
-        // Monitora memória se muitos dados
-        if (dados.length > 10000) {
-          dataLoader.monitorMemory();
-        }
+        // Mostra estatísticas
+        Utils.showNotification(
+          `✅ ${dados.length.toLocaleString('pt-BR')} linhas em ${(loadTime + renderTime).toFixed(1)}s`,
+          'success',
+          3000
+        );
+        
       } else if (dados.error) {
         throw new Error(dados.error);
       } else {
         this.virtualTable.renderEmpty();
       }
-    } catch (error) {
-      // Se falhar com native, tenta método antigo
-      if (useNativeAPI) {
-        Utils.log('⚠️ Native API falhou, tentando Direct SQL...');
-        const dados = await dataLoader.loadWithRetry(this.questionId, filtros);
-        if (dados && dados.length > 0) {
-          this.virtualTable.render(dados);
-        } else {
-          throw error;
-        }
-      } else {
-        throw error;
-      }
-    }
-  }
-
-
-
-
-
-  /**
-   * Carregamento com streaming
-   */
-  async loadDataWithStreaming(filtros) {
-    Utils.log('🌊 Iniciando carregamento com streaming...');
-    
-    // Verifica se a função existe no dataLoader
-    if (!dataLoader.loadDataWithStreaming) {
-      Utils.log('❌ Função loadDataWithStreaming não encontrada no dataLoader');
-      // Fallback para carregamento tradicional
-      return this.loadDataTraditional(filtros);
-    }
-    
-    // Verifica se streaming loader está disponível
-    if (typeof streamingLoader === 'undefined') {
-      Utils.log('⚠️ Streaming loader não carregado, usando método tradicional');
-      return this.loadDataTraditional(filtros);
-    }
-    
-    let chunksRenderizados = 0;
-    let dadosAcumulados = [];
-    let primeiraRenderizacao = true;
-    
-    // Configura callbacks
-    const callbacks = {
-      onChunk: (chunk, metrics) => {
-        // Acumula dados
-        dadosAcumulados = dadosAcumulados.concat(chunk.rows);
-        chunksRenderizados++;
-        
-        // Renderiza incrementalmente a cada N chunks ou N linhas
-        const shouldRender = 
-          primeiraRenderizacao ||
-          chunksRenderizados % 5 === 0 || 
-          dadosAcumulados.length >= 10000;
-        
-        if (shouldRender && dadosAcumulados.length > 0) {
-          const renderStart = performance.now();
-          
-          if (primeiraRenderizacao) {
-            // Primeira renderização - cria estrutura
-            this.virtualTable.render(dadosAcumulados);
-            primeiraRenderizacao = false;
-          } else {
-            // Renderizações subsequentes - atualiza dados
-            this.virtualTable.updateData(dadosAcumulados);
-          }
-          
-          const renderTime = (performance.now() - renderStart) / 1000;
-          Utils.log(`🎨 Renderização incremental: ${renderTime.toFixed(3)}s`);
-        }
-        
-        // Atualiza contador
-        this.virtualTable.updateRowCount(metrics.linhasRecebidas);
-      },
-      
-      onProgress: (progress) => {
-        // Atualiza UI com progresso
-        const percent = Math.min(100, (progress.chunksRecebidos / 20) * 100);
-        this.virtualTable.updateLoadingProgress(
-          `Carregando... ${progress.linhasRecebidas.toLocaleString('pt-BR')} linhas`,
-          percent
-        );
-      }
-    };
-    
-    try {
-      // Inicia streaming
-      const resultado = await dataLoader.loadDataWithStreaming(
-        this.questionId, 
-        filtros,
-        callbacks
-      );
-      
-      // Renderização final se necessário
-      if (resultado.data && resultado.data.length > 0) {
-        if (primeiraRenderizacao) {
-          this.virtualTable.render(resultado.data);
-        } else {
-          this.virtualTable.updateData(resultado.data);
-        }
-        
-        // Mostra métricas finais
-        const metrics = resultado.metrics;
-        Utils.showNotification(
-          `✅ ${metrics.linhasRecebidas.toLocaleString('pt-BR')} linhas carregadas em ${metrics.tempoTotal.toFixed(1)}s`,
-          'success',
-          5000
-        );
-      } else {
-        this.virtualTable.renderEmpty();
-      }
       
     } catch (error) {
+      // Se falhar, mostra erro
+      Utils.log('❌ Erro no Native Performance:', error);
       throw error;
     }
-  }
-
-  /**
-   * Carrega script do streaming loader dinamicamente
-   */
-  async loadStreamingScript() {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'js/streaming-data-loader.js';
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
-
-  /**
-   * Decide se deve usar streaming
-   */
-  async shouldUseStreaming(filtros) {
-    // Usa streaming se tiver poucos filtros (indica dataset grande)
-    const numFiltros = Object.keys(filtros).length;
-    return numFiltros < 3;
   }
 
   /**
@@ -364,15 +204,13 @@ class App {
    * Mostra informações no console
    */
   showConsoleInfo() {
-    console.log('%c🎯 Metabase Tabela Virtual', 'font-size: 20px; color: #2196F3');
+    console.log('%c🎯 Metabase Tabela Virtual (Native Performance)', 'font-size: 20px; color: #2196F3');
     console.log('%cAtalhos disponíveis:', 'font-weight: bold');
     console.log('  Ctrl+R: Recarregar dados');
     console.log('  Ctrl+E: Exportar CSV');
-    console.log('  Ctrl+S: Toggle streaming');
     console.log('\n%cComandos úteis:', 'font-weight: bold');
     console.log('  app.loadData() - Recarrega dados');
     console.log('  app.getStats() - Mostra estatísticas');
-    console.log('  app.useStreaming = true - Ativa streaming');
     console.log('  dataLoader.clearCache() - Limpa cache');
     console.log('  filtrosManager.filtrosAtuais - Mostra filtros ativos');
   }
@@ -387,13 +225,8 @@ class App {
       tabela: this.virtualTable.getStats(),
       loader: dataLoader.getStats(),
       memoria: Utils.checkMemory(),
-      streaming: this.useStreaming
+      metodo: 'Native Performance API'
     };
-    
-    // Adiciona stats do streaming se disponível
-    if (typeof streamingLoader !== 'undefined') {
-      stats.streamingStats = streamingLoader.getStats();
-    }
     
     return stats;
   }
@@ -410,11 +243,6 @@ class App {
     
     dataLoader.cancel();
     dataLoader.clearCache();
-    
-    // Para streaming se estiver ativo
-    if (typeof streamingLoader !== 'undefined') {
-      streamingLoader.stop();
-    }
   }
 }
 

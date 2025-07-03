@@ -72,43 +72,6 @@ class ConsultaMetabase:
                 'filtros': filtros_normalizados
             }
     
-    def executar_consulta_com_processamento(
-        self,
-        question_id: int,
-        filtros: Optional[Dict] = None,
-        processamento: Optional[str] = None
-    ) -> Union[List[Dict], Dict]:
-        """
-        Executa consulta e aplica processamento opcional
-        
-        Args:
-            question_id: ID da questão
-            filtros: Filtros a aplicar
-            processamento: Tipo de processamento ('agregacao', 'transformacao', etc.)
-            
-        Returns:
-            Dados processados
-        """
-        # Executa a consulta base
-        dados = self.executar_consulta(question_id, filtros)
-        
-        if isinstance(dados, dict) and 'error' in dados:
-            return dados
-        
-        # Aplica processamento se solicitado
-        if processamento:
-            # Importa o módulo de processamento adequado
-            if processamento == 'agregacao':
-                from .processamentoDados_agregacao import ProcessadorAgregacao
-                processador = ProcessadorAgregacao()
-                dados = processador.processar(dados)
-            elif processamento == 'transformacao':
-                from .processamentoDados_transformacao import ProcessadorTransformacao
-                processador = ProcessadorTransformacao()
-                dados = processador.processar(dados)
-        
-        return dados
-    
     def obter_info_questao(self, question_id: int) -> Dict:
         """
         Obtém informações sobre uma questão
