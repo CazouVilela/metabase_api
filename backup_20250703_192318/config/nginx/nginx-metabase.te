@@ -1,0 +1,10 @@
+
+module nginx-metabase 1.0;
+
+require {
+	type httpd_t;
+	class capability sys_admin;
+}
+
+#============= httpd_t ==============
+allow httpd_t self:capability sys_admin;

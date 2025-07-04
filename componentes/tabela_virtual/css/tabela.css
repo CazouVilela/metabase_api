@@ -1,0 +1,278 @@
+/**
+ * Estilos específicos para o componente Tabela Virtual
+ */
+
+/* ===== Indicador de Atualização ===== */
+.update-indicator {
+    position: fixed;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    background-color: var(--color-success);
+    color: white;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity var(--transition-normal), 
+                transform var(--transition-normal);
+    z-index: var(--z-index-tooltip);
+    box-shadow: var(--shadow-md);
+}
+
+.update-indicator.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ===== Container de Debug ===== */
+.debug-container {
+    margin: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.debug-container details {
+    cursor: pointer;
+}
+
+.debug-container summary {
+    font-weight: 600;
+    padding: var(--spacing-sm);
+    user-select: none;
+}
+
+.debug-container summary:hover {
+    color: var(--color-primary);
+}
+
+.debug-info {
+    font-size: var(--font-size-sm);
+}
+
+.debug-info ul {
+    margin-left: var(--spacing-lg);
+    margin-top: var(--spacing-xs);
+}
+
+.debug-info pre {
+    background-color: var(--color-background);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-xs);
+    overflow-x: auto;
+    margin-top: var(--spacing-sm);
+}
+
+/* ===== Container da Tabela ===== */
+#table-container {
+    margin: var(--spacing-lg);
+    min-height: 400px;
+}
+
+/* ===== Informações da Tabela ===== */
+.table-info {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+    background-color: var(--color-background);
+}
+
+.table-info-left {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.record-count {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+}
+
+.performance-badge {
+    background: var(--color-info);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+}
+
+.table-info-right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    font-size: var(--font-size-sm);
+}
+
+.update-time {
+    color: var(--color-success);
+}
+
+/* ===== Botões pequenos ===== */
+.btn-sm {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-xs);
+}
+
+/* ===== Área de scroll do Clusterize ===== */
+.clusterize-scroll,
+.table-scroll {
+    max-height: 600px;
+    overflow: auto;
+    border-bottom-left-radius: var(--border-radius-lg);
+    border-bottom-right-radius: var(--border-radius-lg);
+}
+
+/* ===== Estilos específicos da tabela ===== */
+#table-wrapper table {
+    font-size: var(--font-size-sm);
+}
+
+#table-wrapper th {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    white-space: nowrap;
+}
+
+#table-wrapper th:hover {
+    background-color: var(--color-primary-light);
+    cursor: pointer;
+}
+
+/* Bordas do header */
+#table-wrapper th:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 25%;
+    height: 50%;
+    width: 1px;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+#table-wrapper td {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#table-wrapper tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+#table-wrapper tbody tr:hover {
+    background-color: rgba(33, 150, 243, 0.08);
+}
+
+/* ===== Estado Vazio ===== */
+.empty-state {
+    text-align: center;
+    padding: var(--spacing-xxl);
+    color: var(--color-text-secondary);
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: var(--spacing-md);
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    color: var(--color-text);
+    margin-bottom: var(--spacing-sm);
+}
+
+/* ===== Scrollbar Personalizada ===== */
+.clusterize-scroll::-webkit-scrollbar,
+.table-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.clusterize-scroll::-webkit-scrollbar-track,
+.table-scroll::-webkit-scrollbar-track {
+    background: var(--color-background);
+}
+
+.clusterize-scroll::-webkit-scrollbar-thumb,
+.table-scroll::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 5px;
+}
+
+.clusterize-scroll::-webkit-scrollbar-thumb:hover,
+.table-scroll::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+/* ===== Responsividade ===== */
+@media (max-width: 768px) {
+    #app {
+        padding: 0;
+    }
+    
+    #table-container,
+    .debug-container {
+        margin: var(--spacing-sm);
+    }
+    
+    .table-info {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+    
+    .table-info-left,
+    .table-info-right {
+        width: 100%;
+    }
+    
+    .update-indicator {
+        top: var(--spacing-md);
+        right: var(--spacing-md);
+    }
+    
+    .clusterize-scroll,
+    .table-scroll {
+        max-height: 400px;
+    }
+    
+    #table-wrapper table {
+        font-size: var(--font-size-xs);
+    }
+    
+    #table-wrapper th,
+    #table-wrapper td {
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+}
+
+/* ===== Animações ===== */
+.table-container table {
+    animation: fadeIn var(--transition-normal);
+}
+
+.table-info {
+    animation: slideUp var(--transition-normal);
+}
+
+/* ===== Estados de Loading ===== */
+.loading-container {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+/* ===== Performance ===== */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

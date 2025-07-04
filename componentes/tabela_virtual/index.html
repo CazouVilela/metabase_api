@@ -1,45 +1,63 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tabela Virtual - Metabase Dashboard (Native Performance)</title>
-  
-  <!-- CSS Principal -->
-  <link rel="stylesheet" href="styles.css">
-  
-  <!-- ClusterizeJS para virtualização -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabela Virtual - Metabase Customizações</title>
+    
+    <!-- CSS Base Compartilhado -->
+    <link rel="stylesheet" href="../recursos_compartilhados/css/base.css">
+    
+    <!-- CSS Específico da Tabela -->
+    <link rel="stylesheet" href="css/tabela.css">
+    
+    <!-- ClusterizeJS para virtualização -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.min.css">
 </head>
 <body>
-  <!-- Container principal -->
-  <div id="app">
-    <!-- Indicador de atualização -->
-    <div id="update-indicator" class="update-indicator">
-      🔄 Dados atualizados
+    <!-- Container principal -->
+    <div id="app">
+        <!-- Indicador de atualização -->
+        <div id="update-indicator" class="update-indicator">
+            🔄 Dados atualizados
+        </div>
+        
+        <!-- Área de debug (colapsável) -->
+        <div id="debug-container" class="debug-container card"></div>
+        
+        <!-- Container da tabela -->
+        <div id="table-container" class="table-container">
+            <!-- Loading inicial -->
+            <div class="loading-container">
+                <div class="spinner"></div>
+                <p class="text-muted">Inicializando tabela virtual...</p>
+            </div>
+        </div>
     </div>
     
-    <!-- Área de debug (colapsável) -->
-    <div id="debug-container" class="debug-container"></div>
+    <!-- Scripts externos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.min.js"></script>
+
+<!-- Scripts originais para performance -->
+<script src="js/utils.js"></script>
+<script src="js/filtros.js"></script>
+<script src="js/data-loader.js"></script>
+<script src="js/virtual-table.js"></script>
+
+
     
-    <!-- Container da tabela -->
-    <div id="table-container" class="table-container">
-      <!-- Loading inicial -->
-      <div class="loading-container">
-        <div class="spinner"></div>
-        <p>Inicializando (Native Performance)...</p>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Scripts externos -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.min.js"></script>
-  
-  <!-- Scripts da aplicação (ordem importante) -->
-  <script src="js/utils.js"></script>
-  <script src="js/filtros.js"></script>
-  <script src="js/data-loader.js"></script>
-  <script src="js/virtual-table.js"></script>
-  <script src="js/main.js"></script>
+    <!-- Scripts compartilhados -->
+<!--
+    <script src="../recursos_compartilhados/js/api-client.js"></script>
+    <script src="../recursos_compartilhados/js/filter-manager.js"></script>
+    <script src="../recursos_compartilhados/js/data-processor.js"></script>
+    <script src="../recursos_compartilhados/js/export-utils.js"></script>
+    
+    <!-- Scripts do componente -->
+    <script src="js/table-renderer.js"></script>
+-->
+
+
+    <script src="js/main.js"></script>
 </body>
 </html>
