@@ -1,4 +1,4 @@
-# Documentação Técnica Completa - Metabase Customizações v3.0
+# Documentação Técnica Completa - Metabase Customizações v3.1
 
 ## Índice
 
@@ -8,11 +8,12 @@
 4. [API Backend (Flask)](#4-api-backend-flask)
 5. [Frontend (Componentes)](#5-frontend-componentes)
 6. [Fluxos de Dados](#6-fluxos-de-dados)
-7. [Configuração e Deploy](#7-configuração-e-deploy)
-8. [Otimizações e Performance](#8-otimizações-e-performance)
-9. [Troubleshooting](#9-troubleshooting)
-10. [Guia de Desenvolvimento](#10-guia-de-desenvolvimento)
-11. [Changelog v3.0](#11-changelog-v30)
+7. [Sistema de Filtros de Data](#7-sistema-de-filtros-de-data)
+8. [Configuração e Deploy](#8-configuração-e-deploy)
+9. [Otimizações e Performance](#9-otimizações-e-performance)
+10. [Troubleshooting](#10-troubleshooting)
+11. [Guia de Desenvolvimento](#11-guia-de-desenvolvimento)
+12. [Changelog](#12-changelog)
 
 ---
 
@@ -25,9 +26,10 @@ Sistema de customização para Metabase que permite criar componentes interativo
 - **Performance Nativa**: Execução direta no PostgreSQL sem overhead do Metabase
 - **Cache Inteligente**: Redis com compressão gzip e TTL configurável
 - **Filtros Dinâmicos**: Captura automática com suporte a múltiplos valores e caracteres especiais
+- **Parser de Datas Avançado**: Suporte completo para filtros relativos dinâmicos (v3.1)
 - **Virtualização**: Renderização eficiente de grandes volumes de dados (600k+ linhas)
-- **Formato Colunar**: Otimização de memória usando formato nativo do Metabase (v3.0)
-- **Monitoramento Automático**: Detecção e atualização em tempo real de mudanças de filtros (v3.0)
+- **Formato Colunar**: Otimização de memória usando formato nativo do Metabase
+- **Monitoramento Automático**: Detecção e atualização em tempo real de mudanças de filtros
 - **Modular**: Arquitetura de componentes reutilizáveis
 
 ### 1.3 Stack Tecnológico
@@ -37,8 +39,9 @@ Sistema de customização para Metabase que permite criar componentes interativo
 - **Database**: PostgreSQL 12+
 - **Proxy**: Nginx
 - **Deploy**: Gunicorn + systemd
+- **Dependências Python**: python-dateutil (para cálculos de data)
 
-### 1.4 Capacidades de Volume (v3.0)
+### 1.4 Capacidades de Volume
 - **< 250.000 linhas**: Renderização normal instantânea
 - **250.000 - 600.000 linhas**: Formato colunar otimizado
 - **600.000+ linhas**: Suportado com formato colunar nativo
@@ -59,7 +62,8 @@ Sistema de customização para Metabase que permite criar componentes interativo
 [Nginx :8080]
         ↓ (proxy)
 [Flask API :3500]
-        ↓ (extrai query)
+        ↓ (QueryParser processa filtros)
+        ↓ (extrai e modifica query)
 [PostgreSQL :5432]
         ↓ (dados formato colunar)
 [Redis :6379] (cache)
@@ -76,10 +80,9 @@ Sistema de customização para Metabase que permite criar componentes interativo
 - **Query Service**: Executa queries com pool de conexões
 - **Metabase Service**: Comunica com API do Metabase
 - **Cache Service**: Gerencia cache Redis
-- **Filter Processor**: Processa e normaliza filtros
-- **Query Parser**: Manipula SQL e template tags
+- **Query Parser**: Processa template tags e filtros de data dinâmicos (v3.1)
 
-#### Frontend (v3.0)
+#### Frontend
 - **Filter Manager**: Captura e monitora filtros automaticamente
 - **API Client**: Comunicação com backend (recursos compartilhados)
 - **Data Processor**: Processa e formata dados
@@ -97,8 +100,9 @@ metabase_customizacoes/
 │   ├── routes/                   # Endpoints
 │   ├── services/                 # Lógica de negócio
 │   └── utils/                    # Utilitários
+│       └── query_parser.py       # Parser de queries e filtros (v3.1)
 ├── componentes/                  # Frontend
-│   ├── recursos_compartilhados/  # JS/CSS reutilizável (v3.0)
+│   ├── recursos_compartilhados/  # JS/CSS reutilizável
 │   │   ├── js/
 │   │   │   ├── api-client.js    # Cliente API unificado
 │   │   │   ├── filter-manager.js # Gerenciador de filtros
@@ -109,7 +113,7 @@ metabase_customizacoes/
 │   └── tabela_virtual/           # Componente tabela
 │       ├── index.html            # HTML principal
 │       ├── js/
-│       │   ├── main.js           # App principal (v3.0)
+│       │   ├── main.js           # App principal
 │       │   ├── virtual-table.js  # Tabela com formato colunar
 │       │   └── utils.js          # Utilitários locais
 │       └── css/
@@ -120,9 +124,10 @@ metabase_customizacoes/
 └── docs/                         # Documentação
 ```
 
-### 3.2 Arquivos Principais (v3.0)
+### 3.2 Arquivos Principais
 - `api/server.py`: Servidor Flask principal
 - `api/services/query_service.py`: Execução de queries
+- `api/utils/query_parser.py`: Parser avançado de queries e filtros de data (v3.1)
 - `componentes/recursos_compartilhados/js/filter-manager.js`: Monitor automático de filtros
 - `componentes/tabela_virtual/js/main.js`: App com formato colunar
 - `componentes/tabela_virtual/js/virtual-table.js`: Renderização otimizada
@@ -154,9 +159,19 @@ def create_app():
 
 **Parâmetros**:
 - `question_id` (int): ID da pergunta no Metabase
-- `[filtros]`: Qualquer filtro dinâmico
+- `[filtros]`: Qualquer filtro dinâmico, incluindo filtros de data relativos
 
-**Resposta** (v3.0 - Formato Colunar):
+**Exemplo de filtros de data suportados** (v3.1):
+- `data=past7days`: últimos 7 dias (sem incluir hoje)
+- `data=past7days~`: últimos 7 dias incluindo hoje
+- `data=past8weeks`: 8 semanas completas anteriores
+- `data=past8weeks~`: 8 semanas anteriores + semana atual
+- `data=next30days`: próximos 30 dias (começando amanhã)
+- `data=next30days~`: próximos 30 dias incluindo hoje
+- `data=thisday`: hoje (Metabase usa "thisday" em vez de "today")
+- `data=2024-01-01~2024-12-31`: intervalo específico
+
+**Resposta** (Formato Colunar):
 ```json
 {
   "data": {
@@ -175,160 +190,68 @@ def create_app():
 }
 ```
 
-**Fluxo interno**:
-1. FilterProcessor captura filtros
-2. QueryService.execute_query()
-3. Retorna dados em formato colunar (não converte para objetos)
-4. Response comprimida com gzip
-
 ### 4.3 Query Service (`api/services/query_service.py`)
 
-**Otimizações para grandes volumes** (v3.0):
+**Otimizações para grandes volumes**:
 - Mantém formato colunar do PostgreSQL
-- Não cria objetos desnecessários
+- Pool de conexões persistente (20 conexões)
 - work_mem aumentado para 256MB
-- Processamento direto de tipos
+- Cache Redis com compressão gzip
 
 ---
 
 ## 5. Frontend (Componentes)
 
-### 5.1 Recursos Compartilhados (v3.0)
+### 5.1 Recursos Compartilhados
 
 #### Filter Manager (`recursos_compartilhados/js/filter-manager.js`)
 
-**Novo recurso principal**: Monitoramento automático de mudanças
-
-```javascript
-class FilterManager {
-    captureFromParent() {
-        // Captura filtros da URL do dashboard parent
-    }
-    
-    startMonitoring(interval = 1000) {
-        // Monitora mudanças automaticamente
-        // Notifica observers quando detecta mudança
-    }
-    
-    onChange(callback) {
-        // Registra callback para mudanças
-    }
-}
-```
-
-**Funcionalidades**:
+**Funcionalidades principais**:
 - ✅ Detecção automática de mudanças de filtros
 - ✅ Suporte a múltiplos valores
 - ✅ Normalização de parâmetros
 - ✅ Decodificação de caracteres especiais
+- ✅ Monitoramento automático com intervalo configurável
+
+```javascript
+// Exemplo de uso
+filterManager.startMonitoring(1000); // Verifica a cada segundo
+filterManager.onChange((filters) => {
+    console.log('Filtros mudaram:', filters);
+});
+```
 
 #### API Client (`recursos_compartilhados/js/api-client.js`)
 
 ```javascript
-class MetabaseAPIClient {
-    async queryData(questionId, filters) {
-        // Retorna dados em formato colunar
-        // Cache local automático
-        // Timeout de 5 minutos
-    }
-}
+// Exemplo de uso
+const apiClient = new MetabaseAPIClient();
+const data = await apiClient.queryData(questionId, {
+    conta: 'EMPRESA XYZ',
+    data: 'past7days~'
+});
 ```
 
-#### Data Processor (`recursos_compartilhados/js/data-processor.js`)
-
-```javascript
-class DataProcessor {
-    processNativeResponse(nativeData) {
-        // Converte formato colunar → objetos
-        // Usado apenas quando necessário
-    }
-}
-```
-
-### 5.2 Componente Tabela Virtual (v3.0)
-
-#### Estrutura HTML (`tabela_virtual/index.html`)
-```html
-<!-- Scripts compartilhados obrigatórios -->
-<script src="../recursos_compartilhados/js/api-client.js"></script>
-<script src="../recursos_compartilhados/js/filter-manager.js"></script>
-<script src="../recursos_compartilhados/js/data-processor.js"></script>
-<script src="../recursos_compartilhados/js/export-utils.js"></script>
-
-<!-- Scripts locais -->
-<script src="js/utils.js"></script>
-<script src="js/virtual-table.js"></script>
-<script src="js/main.js"></script>
-```
+### 5.2 Componente Tabela Virtual
 
 #### App Principal (`tabela_virtual/js/main.js`)
 
-**Principais mudanças v3.0**:
-
-```javascript
-class App {
-    async init() {
-        // Usa recursos compartilhados
-        this.apiClient = new MetabaseAPIClient();
-        
-        // Inicia monitoramento automático
-        filterManager.startMonitoring(1000);
-        
-        // Registra callback para mudanças
-        filterManager.onChange(() => {
-            this.loadData('mudança de filtros');
-        });
-    }
-    
-    async loadData() {
-        // Detecta formato colunar automaticamente
-        if (response.data && response.data.rows && response.data.cols) {
-            // Usa formato colunar otimizado
-            this.virtualTable.renderNative(response);
-        } else {
-            // Fallback para formato de objetos
-            this.virtualTable.render(dados);
-        }
-    }
-}
-```
-
-#### Virtual Table (`tabela_virtual/js/virtual-table.js`)
-
-**Nova funcionalidade principal**: Suporte a formato colunar
-
-```javascript
-class VirtualTable {
-    renderNative(response) {
-        // Mantém formato colunar (arrays)
-        // 3x menos memória que objetos
-        // Suporta 600k+ linhas
-    }
-    
-    renderWithClusterizeColumnar() {
-        // Gera HTML progressivamente
-        // Batches de 10k linhas
-        // Não trava o navegador
-    }
-    
-    exportToCsvColumnar() {
-        // Exporta em chunks de 50k
-        // Mostra progresso
-        // Formata valores corretamente
-    }
-}
-```
+**Principais funcionalidades**:
+- Usa recursos compartilhados
+- Monitoramento automático de filtros
+- Suporte a formato colunar nativo
+- Exportação CSV otimizada
 
 ---
 
 ## 6. Fluxos de Dados
 
-### 6.1 Fluxo com Monitoramento Automático (v3.0)
+### 6.1 Fluxo com Monitoramento Automático
 
 ```
 1. Dashboard Metabase
-   - Usuário muda filtro
-   - URL atualiza: ?conta=EMPRESA&data=2024-01-01
+   - Usuário muda filtro de data para "Últimas 8 semanas"
+   - URL atualiza: ?data=past8weeks
    
 2. FilterManager (monitoramento ativo)
    - Verifica URL a cada 1 segundo
@@ -337,41 +260,106 @@ class VirtualTable {
    
 3. App.loadData() é chamado
    - Captura filtros atuais
-   - Envia requisição
+   - Envia para API: data=past8weeks
    
-4. Backend processa
+4. QueryParser processa
+   - Detecta filtro relativo "past8weeks"
+   - Calcula datas: 2025-05-25 até 2025-07-19
+   - Substitui template tag: date BETWEEN '2025-05-25' AND '2025-07-19'
+   
+5. Backend executa query
    - Mantém formato colunar
-   - Não converte para objetos
+   - Retorna dados otimizados
    
-5. Frontend renderiza
+6. Frontend renderiza
    - Usa formato colunar se disponível
    - 3x menos memória
-   - Suporta 600k+ linhas
-```
-
-### 6.2 Otimizações para Grandes Volumes (v3.0)
-
-```
-Volume < 250k linhas:
-- Renderização normal
-- Conversão para objetos OK
-
-Volume 250k-600k linhas:
-- Formato colunar obrigatório
-- Renderização progressiva
-- Geração de HTML em batches
-
-Volume > 600k linhas:
-- Formato colunar
-- Pode requerer mais memória
-- Exportação sempre funciona
 ```
 
 ---
 
-## 7. Configuração e Deploy
+## 7. Sistema de Filtros de Data
 
-### 7.1 Variáveis de Ambiente (.env)
+### 7.1 Parser Dinâmico de Datas (v3.1)
+
+O sistema suporta filtros de data dinâmicos compatíveis com o Metabase. O parser (`api/utils/query_parser.py`) detecta e converte automaticamente filtros relativos em intervalos de data SQL.
+
+#### 7.1.1 Sintaxe Suportada
+
+**Formato básico**: `[direção][número][unidade][flag_inclusão]`
+- **direção**: past, last, next, previous
+- **número**: qualquer número inteiro
+- **unidade**: days, weeks, months, quarters, years
+- **flag_inclusão**: `~` (opcional) para incluir período atual
+
+#### 7.1.2 Comportamento dos Filtros
+
+**PASSADO (past/last)**:
+
+| Filtro | Sem flag (~) | Com flag (~) |
+|--------|--------------|--------------|
+| past7days | Últimos 7 dias (excluindo hoje) | Últimos 7 dias incluindo hoje |
+| past2weeks | 2 semanas completas anteriores (Dom-Sáb) | 2 semanas anteriores + semana atual |
+| past3months | 3 meses completos anteriores | 3 meses anteriores + mês atual |
+| past1quarters | Trimestre anterior completo | Trimestre anterior + trimestre atual |
+| past2years | 2 anos completos anteriores | 2 anos anteriores + ano atual |
+
+**FUTURO (next)**:
+
+| Filtro | Sem flag (~) | Com flag (~) |
+|--------|--------------|--------------|
+| next7days | Próximos 7 dias (começa amanhã) | Hoje + próximos 7 dias |
+| next2weeks | 2 semanas começando no próximo domingo | Semana atual + próximas 2 semanas |
+| next3months | 3 meses começando no próximo mês | Mês atual + próximos 3 meses |
+
+#### 7.1.3 Casos Especiais
+
+- `thisday`: hoje (Metabase usa este em vez de "today")
+- `yesterday`: ontem
+- `tomorrow`: amanhã
+- `thisweek/month/quarter/year`: período atual completo
+- `lastweek/month/quarter/year`: período anterior completo
+- `nextweek/month/quarter/year`: próximo período completo
+- `alltime`: desde 2000-01-01 até hoje
+
+#### 7.1.4 Exemplos Práticos
+
+Considerando hoje = 23/07/2025 (Quarta):
+
+```
+past1days     → 2025-07-22 (apenas ontem)
+past1days~    → 2025-07-22 até 2025-07-23 (ontem + hoje)
+past7days     → 2025-07-16 até 2025-07-22 (7 dias sem hoje)
+past7days~    → 2025-07-17 até 2025-07-23 (7 dias com hoje)
+
+past8weeks    → 2025-05-25 (Dom) até 2025-07-19 (Sáb) - 8 semanas completas
+past8weeks~   → 2025-05-25 (Dom) até 2025-07-26 (Sáb) - 8 semanas + atual
+
+next1days     → 2025-07-24 (apenas amanhã)
+next1days~    → 2025-07-23 até 2025-07-24 (hoje + amanhã)
+next7days     → 2025-07-24 até 2025-07-30 (7 dias começando amanhã)
+next7days~    → 2025-07-23 até 2025-07-29 (hoje + próximos 7 dias)
+```
+
+### 7.2 Implementação Técnica
+
+O parser usa regex para detectar padrões dinâmicos:
+
+```python
+pattern = r'^(past|last|next|previous)(\d+)(day|days|week|weeks|month|months|quarter|quarters|year|years)$'
+```
+
+Principais características:
+- Usa `datetime` e `timedelta` para dias
+- Usa `relativedelta` para meses/anos (mais preciso)
+- Semanas começam no domingo (padrão Metabase)
+- Trimestres seguem calendário fiscal (Q1=Jan-Mar)
+
+---
+
+## 8. Configuração e Deploy
+
+### 8.1 Variáveis de Ambiente (.env)
 
 ```env
 # Metabase
@@ -398,7 +386,7 @@ API_TIMEOUT=300
 CACHE_ENABLED=true
 CACHE_TTL=300
 
-# Performance (v3.0)
+# Performance
 MAX_POOL_SIZE=20
 WORK_MEM=256MB
 MAX_ROWS_WITHOUT_WARNING=250000
@@ -408,7 +396,16 @@ DEBUG=false
 LOG_LEVEL=INFO
 ```
 
-### 7.2 Scripts de Gestão
+### 8.2 Instalação de Dependências
+
+```bash
+cd ~/metabase_customizacoes
+source venv/bin/activate
+pip install -r requirements.txt
+pip install python-dateutil  # Necessário para parser de datas v3.1
+```
+
+### 8.3 Scripts de Gestão
 
 #### start.sh
 ```bash
@@ -416,15 +413,22 @@ LOG_LEVEL=INFO
 - Verifica .env
 - Cria/ativa venv
 - pip install -r requirements.txt
-- Testa PostgreSQL e Metabase
+- Testa PostgreSQL, Redis e Metabase
 - Inicia servidor (dev ou gunicorn)
+```
+
+#### stop.sh
+```bash
+#!/bin/bash
+- Para servidor Flask/Gunicorn
+- Limpa processos órfãos
 ```
 
 ---
 
-## 8. Otimizações e Performance
+## 9. Otimizações e Performance
 
-### 8.1 Backend
+### 9.1 Backend
 
 #### Pool de Conexões
 - 20 conexões persistentes
@@ -438,168 +442,137 @@ SET work_mem = '256MB';
 SET random_page_cost = 1.1;
 ```
 
-### 8.2 Frontend (v3.0)
+#### Cache Redis
+- Compressão gzip (~96% de redução)
+- TTL configurável (padrão 5 minutos)
+- Chave baseada em hash SHA256
+
+### 9.2 Frontend
 
 #### Formato Colunar
-**Antes (objetos)**:
-```javascript
-// 600k objetos × 39 propriedades = 23M propriedades
-// ~1.2GB de memória
-[
-  {col1: "val", col2: "val", ...col39: "val"},
-  // ... 600k objetos
-]
-```
+**Economia de memória**:
+- Formato objeto: ~1.2GB para 600k linhas
+- Formato colunar: ~400MB (3x menos!)
 
-**Depois (arrays)**:
-```javascript
-// 600k arrays simples
-// ~400MB de memória (3x menos!)
-{
-  cols: [{name: "col1"}, ...],
-  rows: [
-    ["val", "val", ..."val"],
-    // ... 600k arrays
-  ]
-}
-```
-
-#### Virtualização Otimizada
+#### Virtualização
 - ClusterizeJS com geração progressiva
 - HTML criado sob demanda
 - Apenas elementos visíveis renderizados
 
-### 8.3 Monitoramento de Filtros (v3.0)
-
-#### Implementação Eficiente
-- Intervalo adaptativo (1s → 5s)
-- Comparação por string JSON
-- Observers assíncronos
-- Zero polling quando não há mudanças
-
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
-### 9.1 Problemas Comuns
+### 10.1 Problemas Comuns
 
-#### "Out of Memory" com grandes volumes
-**Solução v3.0**: O formato colunar resolve até ~600k linhas
-
-1. Verificar no console:
-```javascript
-app.virtualTable.getStats() // Mostra formato em uso
-```
-
-2. Se ainda der erro:
-- Aplicar filtros para reduzir volume
-- Aumentar memória do Chrome: `--max-old-space-size=4096`
-- Usar exportação CSV
-
-#### "Filtros não atualizam automaticamente"
-**Verificar**:
-```javascript
-// No console do iframe
-filterManager.monitoringInterval // Deve mostrar número
-filterManager.currentFilters     // Filtros atuais
-```
+#### "Filtro de data retorna 0 linhas"
+**Causas possíveis**:
+1. Template tag mal configurado no Metabase
+2. Formato de data não reconhecido
 
 **Solução**:
-```javascript
-// Reiniciar monitoramento
-filterManager.stopMonitoring();
-filterManager.startMonitoring(500); // Verifica a cada 500ms
+- Verificar se o template tag está como `[[AND {{data}}]]`
+- Verificar logs do parser para ver datas calculadas
+- Testar com filtros simples primeiro (today, yesterday)
+
+#### "Diferença de linhas entre Metabase e iframe"
+**Causa**: Cálculo diferente de períodos
+
+**Solução v3.1**:
+- O parser agora calcula períodos idênticos ao Metabase
+- Semanas começam no domingo
+- Flag `~` inclui período atual completo
+
+#### "Erro 500 com filtros de data"
+**Causa**: Parser não reconheceu formato
+
+**Logs úteis**:
+```
+📅 Filtro dinâmico detectado: past 8 weeks
+📊 Datas calculadas: 2025-05-25 (Dom) até 2025-07-19 (Sáb)
+→ 8 semanas completas (56 dias)
 ```
 
-### 9.2 Comandos de Debug (v3.0)
+### 10.2 Comandos de Debug
 
 ```javascript
 // Console do navegador
 
-// Estatísticas completas
+// Ver filtros atuais
+filterManager.currentFilters
+
+// Ver estatísticas
 app.getStats()
 
-// Verificar formato de dados
-app.virtualTable.isColumnarFormat // true = otimizado
-
-// Monitoramento de filtros
-filterManager.getDebugInfo()
-
-// Forçar recarga
-app.loadData('debug manual')
-
-// Limpar cache
-app.apiClient.clearCache()
+// Testar parser de data manualmente
+// No servidor Flask, verificar logs ao aplicar filtros
 ```
 
 ---
 
-## 10. Guia de Desenvolvimento
+## 11. Guia de Desenvolvimento
 
-### 10.1 Adicionar Novo Componente
+### 11.1 Adicionar Suporte a Novo Filtro de Data
 
-1. **Criar estrutura**:
-```bash
-mkdir -p componentes/meu_grafico/{js,css}
-cp componentes/tabela_virtual/index.html componentes/meu_grafico/
-```
+1. **Verificar se já é suportado**:
+   - O parser suporta qualquer combinação de número + unidade
+   - Ex: past365days, next52weeks funcionam automaticamente
 
-2. **Modificar index.html**:
-```html
-<!-- Sempre incluir recursos compartilhados -->
-<script src="../recursos_compartilhados/js/api-client.js"></script>
-<script src="../recursos_compartilhados/js/filter-manager.js"></script>
-```
+2. **Adicionar caso especial** (se necessário):
+   ```python
+   # Em query_parser.py, adicionar em special_cases
+   'myfiltername': lambda: (start_date, end_date)
+   ```
 
-3. **JavaScript principal**:
-```javascript
-class MeuGrafico {
-    async init() {
-        // Usar recursos compartilhados
-        this.apiClient = new MetabaseAPIClient();
-        
-        // Monitoramento automático
-        filterManager.startMonitoring(1000);
-        filterManager.onChange(() => this.updateChart());
-    }
-}
-```
+3. **Testar**:
+   ```bash
+   # Aplicar filtro no dashboard
+   # Verificar logs do servidor para datas calculadas
+   ```
 
-### 10.2 Trabalhar com Grandes Volumes
-
-```javascript
-// Sempre verificar formato disponível
-if (response.data && response.data.cols) {
-    // Usar formato colunar
-    this.processColumnarData(response.data);
-} else {
-    // Fallback para objetos
-    this.processObjectData(data);
-}
-```
-
-### 10.3 Melhores Práticas (v3.0)
+### 11.2 Melhores Práticas
 
 1. **Performance**:
    - Sempre preferir formato colunar para > 100k linhas
-   - Usar recursos compartilhados (não duplicar código)
-   - Implementar exportação em chunks
+   - Usar cache Redis para queries pesadas
+   - Aplicar filtros para reduzir volume
 
-2. **Memória**:
-   - Evitar conversão desnecessária de dados
-   - Usar virtualização para grandes volumes
-   - Limpar referências quando não usadas
+2. **Filtros de Data**:
+   - Sempre testar com e sem flag `~`
+   - Verificar logs para confirmar datas
+   - Considerar timezone (servidor usa hora local)
 
-3. **UX**:
-   - Mostrar progresso para operações longas
-   - Feedback claro sobre volume de dados
-   - Exportação sempre disponível
+3. **Debug**:
+   - Ativar DEBUG=true no .env para logs detalhados
+   - Usar ferramentas do navegador para monitorar memória
+   - Verificar Network tab para ver tamanho das respostas
 
 ---
 
-## 11. Changelog v3.0
+## 12. Changelog
 
-### Novidades Principais
+### v3.1.0 (23/07/2025)
+
+#### 🚀 Parser de Datas Dinâmico
+- Suporte completo para filtros relativos do Metabase
+- Detecção automática de padrões (past/next + número + unidade)
+- Cálculo correto de períodos completos
+- Flag `~` para incluir período atual
+- Compatibilidade total com comportamento do Metabase
+
+#### 🐛 Correções
+- ✅ Corrigido erro 500 com filtros relativos (past7weeks)
+- ✅ Corrigido cálculo de semanas (domingo a sábado)
+- ✅ Corrigido diferença de contagem de linhas
+- ✅ Corrigido suporte para "thisday" (Metabase usa em vez de "today")
+- ✅ Corrigido comportamento de filtros futuros com flag
+
+#### 📝 Melhorias
+- Logs detalhados mostrando datas calculadas e dias da semana
+- Mensagens específicas por tipo de período
+- Documentação completa do sistema de filtros
+
+### v3.0.0 (Janeiro 2025)
 
 #### 🚀 Formato Colunar Nativo
 - Suporte a 600.000+ linhas sem erro
@@ -616,47 +589,28 @@ if (response.data && response.data.cols) {
 - Manutenção centralizada
 - Redução de duplicação
 
-#### ⚡ Otimizações de Performance
-- Renderização progressiva para grandes volumes
-- Exportação otimizada em chunks
-- Geração de HTML sob demanda
+### v2.0.0
 
-### Correções
-
-- ✅ Corrigido erro "Out of Memory" para grandes volumes
-- ✅ Corrigido monitoramento de filtros não funcionando
-- ✅ Corrigido erro do ClusterizeJS ao destruir com muitos dados
-- ✅ Melhorada decodificação de caracteres especiais
-
-### Breaking Changes
-
-- `filtros.js` removido em favor de `filter-manager.js`
-- `data-loader.js` substituído por `api-client.js`
-- Formato de resposta agora mantém estrutura colunar
-
-### Migração de v2.0 para v3.0
-
-1. Atualizar `index.html` para incluir recursos compartilhados
-2. Substituir `filtrosManager` por `filterManager` no código
-3. Adaptar para usar `renderNative()` com dados colunares
-4. Remover arquivos duplicados (`filtros.js`, `data-loader.js`)
+- Versão inicial com tabela virtual
+- Suporte básico a filtros
+- Cache Redis
 
 ---
 
 ## Sobre Esta Documentação
 
-**Versão**: 3.0.0  
-**Última Atualização**: Janeiro 2025  
-**Principais Mudanças**: Formato colunar, monitoramento automático, recursos compartilhados
+**Versão**: 3.1.0  
+**Última Atualização**: 23 de Julho de 2025  
+**Principais Mudanças**: Parser de datas dinâmico completo, correção de comportamento de filtros
 
-### Contribuindo
+### Manutenção
 
 Para manter esta documentação atualizada:
 1. Documente mudanças significativas na seção Changelog
 2. Atualize exemplos de código quando modificar APIs
-3. Adicione novos troubleshooting descobertos
-4. Mantenha o índice sincronizado
+3. Adicione novos casos de troubleshooting descobertos
+4. Mantenha a seção de filtros de data atualizada com novos padrões
 
 ---
 
-**Fim da Documentação Técnica v3.0**
+**Fim da Documentação Técnica v3.1**
