@@ -82,6 +82,14 @@ class QueryService:
         """
         Executa query e retorna Response no formato do Metabase
         """
+
+	# DEBUG: Log detalhado dos filtros
+	print("\n" + "="*60)
+    	print("🔍 DEBUG - Filtros recebidos:")
+    	for key, value in filters.items():
+       	    print(f"   {key}: {value} (tipo: {type(value).__name__})")
+    	print("="*60 + "\n")
+
         # Gera cache key
         cache_key = self._generate_cache_key(question_id, filters)
         
