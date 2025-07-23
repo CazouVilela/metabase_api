@@ -11,7 +11,7 @@
     <!-- CSS Específico da Tabela -->
     <link rel="stylesheet" href="css/tabela.css">
     
-    <!-- ClusterizeJS para virtualização -->
+    <!-- ClusterizeJS para virtualização (CDN) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.min.css">
 </head>
 <body>
@@ -35,29 +35,26 @@
         </div>
     </div>
     
-    <!-- Scripts externos -->
+    <!-- Scripts externos (CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.18.0/clusterize.min.js"></script>
-
-<!-- Scripts originais para performance -->
-<script src="js/utils.js"></script>
-<script src="js/filtros.js"></script>
-<script src="js/data-loader.js"></script>
-<script src="js/virtual-table.js"></script>
-
-
     
     <!-- Scripts compartilhados -->
-<!--
     <script src="../recursos_compartilhados/js/api-client.js"></script>
     <script src="../recursos_compartilhados/js/filter-manager.js"></script>
     <script src="../recursos_compartilhados/js/data-processor.js"></script>
     <script src="../recursos_compartilhados/js/export-utils.js"></script>
     
-    <!-- Scripts do componente -->
-    <script src="js/table-renderer.js"></script>
--->
-
-
+    <!-- Scripts locais específicos do componente -->
+    <script src="js/utils.js"></script>
+    <script src="js/virtual-table.js"></script>
+    
+    <!-- Script principal adaptado para recursos compartilhados -->
     <script src="js/main.js"></script>
+    
+    <!-- 
+    Scripts removidos (substituídos pelos compartilhados):
+    - js/filtros.js → substituído por filter-manager.js
+    - js/data-loader.js → substituído por api-client.js + data-processor.js
+    -->
 </body>
 </html>

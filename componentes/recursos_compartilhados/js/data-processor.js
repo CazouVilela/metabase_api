@@ -1,276 +1,290 @@
+// componentes/recursos_compartilhados/js/data-processor.js
 /**
  * Processador de dados compartilhado
- * @module data-processor
+ * Converte formatos e aplica formatações
  */
 
 class DataProcessor {
-    constructor() {
-        this.formatters = new Map();
-        this.setupDefaultFormatters();
-    }
-    
-    /**
-     * Configura formatadores padrão
-     * @private
-     */
-    setupDefaultFormatters() {
-        // Formatador de números
-        this.formatters.set('number', (value) => {
-            if (value === null || value === undefined) return '';
-            return new Intl.NumberFormat('pt-BR').format(value);
-        });
+  constructor() {
+    // Formatadores por tipo de dados
+    this.formatters = {
+      // Números
+      number: new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+      }),
+      
+      // Moeda
+      currency: new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }),
+      
+      // Percentual
+      percent: new Intl.NumberFormat('pt-BR', {
+        style: 'percent',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }),
+      
+      // Data
+      date: new Intl.DateTimeFormat('pt-BR'),
+      
+      // Data e hora
+      datetime: new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short'
+      })
+    };
+  }
+  
+  /**
+   * Processa resposta no formato nativo do Metabase (colunar)
+   * @param {Object} nativeData - Resposta com {data: {cols, rows}}
+   * @returns {Array} Array de objetos
+   */
+  processNativeResponse(nativeData) {
+    // Se tem o formato nativo (colunar)
+    if (nativeData && nativeData.data && nativeData.data.rows) {
+      const { cols, rows } = nativeData.data;
+      
+      console.log(`📊 Processando formato nativo: ${rows.length} linhas, ${cols.length} colunas`);
+      
+      // Extrai nomes das colunas e tipos
+      const colNames = cols.map(col => col.name);
+      const colTypes = cols.map(col => col.base_type);
+      
+      // Converte formato colunar para array de objetos
+      const result = rows.map(row => {
+        const obj = {};
         
-        // Formatador de moeda
-        this.formatters.set('currency', (value) => {
-            if (value === null || value === undefined) return '';
-            return new Intl.NumberFormat('pt-BR', {
-                style: 'currency',
-                currency: 'BRL'
-            }).format(value);
-        });
-        
-        // Formatador de porcentagem
-        this.formatters.set('percent', (value) => {
-            if (value === null || value === undefined) return '';
-            return new Intl.NumberFormat('pt-BR', {
-                style: 'percent',
-                minimumFractionDigits: 2
-            }).format(value / 100);
-        });
-        
-        // Formatador de data
-        this.formatters.set('date', (value) => {
-            if (!value) return '';
-            const date = new Date(value);
-            return date.toLocaleDateString('pt-BR');
-        });
-        
-        // Formatador de data/hora
-        this.formatters.set('datetime', (value) => {
-            if (!value) return '';
-            const date = new Date(value);
-            return date.toLocaleString('pt-BR');
-        });
-    }
-    
-    /**
-     * Processa resposta no formato nativo do Metabase
-     * @param {Object} nativeData - Dados no formato nativo
-     * @returns {Array} Array de objetos
-     */
-    processNativeResponse(nativeData) {
-        // Se tem o formato nativo (colunar)
-        if (nativeData && nativeData.data && nativeData.data.rows) {
-            const cols = nativeData.data.cols;
-            const rows = nativeData.data.rows;
-            
-            console.log(`[DataProcessor] Native: ${rows.length} linhas, ${cols.length} colunas`);
-            
-            // Converte formato colunar para objetos
-            const result = [];
-            const colNames = cols.map(c => c.name);
-            
-            for (let i = 0; i < rows.length; i++) {
-                const obj = {};
-                for (let j = 0; j < colNames.length; j++) {
-                    obj[colNames[j]] = rows[i][j];
-                }
-                result.push(obj);
+        for (let i = 0; i < colNames.length; i++) {
+          const colName = colNames[i];
+          const colType = colTypes[i];
+          let value = row[i];
+          
+          // Aplica conversões básicas por tipo
+          if (value !== null && value !== undefined) {
+            if (colType === 'type/Date' || colType === 'type/DateTime') {
+              // Mantém como string ISO se já for, ou converte
+              if (value instanceof Date) {
+                value = value.toISOString();
+              }
+            } else if (colType === 'type/Decimal' || colType === 'type/Float') {
+              // Garante que seja número
+              value = parseFloat(value);
+            } else if (colType === 'type/Integer' || colType === 'type/BigInteger') {
+              value = parseInt(value);
             }
-            
-            return result;
+          }
+          
+          obj[colName] = value;
         }
         
-        // Se já for array de objetos, retorna direto
-        if (Array.isArray(nativeData)) {
-            return nativeData;
+        return obj;
+      });
+      
+      return result;
+    }
+    
+    // Se já for array de objetos, retorna direto
+    if (Array.isArray(nativeData)) {
+      return nativeData;
+    }
+    
+    console.error('❌ Formato de resposta não reconhecido:', nativeData);
+    return [];
+  }
+  
+  /**
+   * Formata valor baseado no tipo
+   * @param {any} value - Valor a formatar
+   * @param {string} type - Tipo de formatação
+   * @returns {string} Valor formatado
+   */
+  formatValue(value, type) {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+    
+    try {
+      switch(type) {
+        case 'number':
+          return this.formatters.number.format(value);
+          
+        case 'currency':
+        case 'money':
+        case 'brl':
+          return this.formatters.currency.format(value);
+          
+        case 'percent':
+        case 'percentage':
+          // Se o valor já estiver em percentual (ex: 95.5), divide por 100
+          const percentValue = value > 1 ? value / 100 : value;
+          return this.formatters.percent.format(percentValue);
+          
+        case 'date':
+          return this.formatDate(value);
+          
+        case 'datetime':
+          return this.formatDateTime(value);
+          
+        default:
+          return String(value);
+      }
+    } catch (error) {
+      console.warn('⚠️ Erro ao formatar valor:', error);
+      return String(value);
+    }
+  }
+  
+  /**
+   * Formata data
+   * @private
+   */
+  formatDate(value) {
+    if (!value) return '';
+    
+    const date = value instanceof Date ? value : new Date(value);
+    
+    if (isNaN(date.getTime())) {
+      return String(value);
+    }
+    
+    return this.formatters.date.format(date);
+  }
+  
+  /**
+   * Formata data e hora
+   * @private
+   */
+  formatDateTime(value) {
+    if (!value) return '';
+    
+    const date = value instanceof Date ? value : new Date(value);
+    
+    if (isNaN(date.getTime())) {
+      return String(value);
+    }
+    
+    return this.formatters.datetime.format(date);
+  }
+  
+  /**
+   * Detecta tipo de dados automaticamente
+   * @param {any} value - Valor para análise
+   * @returns {string} Tipo detectado
+   */
+  detectType(value) {
+    if (value === null || value === undefined) {
+      return 'null';
+    }
+    
+    // Verifica se é data
+    if (value instanceof Date || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value))) {
+      return 'date';
+    }
+    
+    // Verifica se é número
+    if (typeof value === 'number') {
+      // Se tem casa decimal e está entre 0 e 1, provavelmente é percentual
+      if (value > 0 && value < 1 && value.toString().includes('.')) {
+        return 'percent';
+      }
+      
+      // Se for maior que 1000, pode ser moeda
+      if (value > 1000) {
+        return 'currency';
+      }
+      
+      return 'number';
+    }
+    
+    return 'string';
+  }
+  
+  /**
+   * Processa metadados das colunas
+   * @param {Array} cols - Array de metadados de colunas
+   * @returns {Object} Mapa de coluna -> formatação
+   */
+  processColumnMetadata(cols) {
+    const metadata = {};
+    
+    cols.forEach(col => {
+      const formatting = {
+        name: col.name,
+        displayName: col.display_name || col.name,
+        type: col.base_type,
+        formatter: null
+      };
+      
+      // Define formatador baseado no tipo ou nome
+      if (col.base_type === 'type/Decimal' || col.base_type === 'type/Float') {
+        // Verifica se é moeda pelo nome
+        if (/spend|cost|revenue|valor|price|preco/i.test(col.name)) {
+          formatting.formatter = 'currency';
+        } else if (/rate|percent|taxa|ctr|cpm|roas/i.test(col.name)) {
+          formatting.formatter = 'percent';
+        } else {
+          formatting.formatter = 'number';
         }
-        
-        console.error('[DataProcessor] Formato de resposta inesperado:', nativeData);
-        return [];
-    }
+      } else if (col.base_type === 'type/Date') {
+        formatting.formatter = 'date';
+      } else if (col.base_type === 'type/DateTime') {
+        formatting.formatter = 'datetime';
+      }
+      
+      metadata[col.name] = formatting;
+    });
     
-    /**
-     * Extrai metadados das colunas
-     * @param {Object} nativeData - Dados no formato nativo
-     * @returns {Array} Metadados das colunas
-     */
-    extractColumnMetadata(nativeData) {
-        if (nativeData && nativeData.data && nativeData.data.cols) {
-            return nativeData.data.cols.map(col => ({
-                name: col.name,
-                displayName: col.display_name || col.name,
-                type: col.base_type || 'type/Text',
-                formatter: this.getFormatterForType(col.base_type)
-            }));
-        }
-        
-        return [];
-    }
-    
-    /**
-     * Obtém formatador baseado no tipo
-     * @private
-     */
-    getFormatterForType(type) {
-        const typeMap = {
-            'type/Integer': 'number',
-            'type/BigInteger': 'number',
-            'type/Float': 'number',
-            'type/Decimal': 'number',
-            'type/Currency': 'currency',
-            'type/Date': 'date',
-            'type/DateTime': 'datetime',
-            'type/DateTimeWithTZ': 'datetime'
-        };
-        
-        return typeMap[type] || null;
-    }
-    
-    /**
-     * Formata valor usando formatador apropriado
-     * @param {any} value - Valor a formatar
-     * @param {string} formatter - Nome do formatador
-     * @returns {string} Valor formatado
-     */
-    formatValue(value, formatter) {
-        if (!formatter || !this.formatters.has(formatter)) {
-            return value?.toString() || '';
-        }
-        
-        const formatFn = this.formatters.get(formatter);
-        try {
-            return formatFn(value);
-        } catch (e) {
-            console.warn(`Erro ao formatar valor: ${e.message}`);
-            return value?.toString() || '';
-        }
-    }
-    
-    /**
-     * Adiciona formatador customizado
-     * @param {string} name - Nome do formatador
-     * @param {Function} formatter - Função formatadora
-     */
-    addFormatter(name, formatter) {
-        this.formatters.set(name, formatter);
-    }
-    
-    /**
-     * Agrupa dados por campo
-     * @param {Array} data - Dados a agrupar
-     * @param {string} field - Campo para agrupar
-     * @returns {Object} Dados agrupados
-     */
-    groupBy(data, field) {
-        return data.reduce((groups, item) => {
-            const key = item[field];
-            if (!groups[key]) {
-                groups[key] = [];
-            }
-            groups[key].push(item);
-            return groups;
-        }, {});
-    }
-    
-    /**
-     * Calcula agregações
-     * @param {Array} data - Dados para agregar
-     * @param {Object} aggregations - Definição das agregações
-     * @returns {Object} Resultados das agregações
-     */
-    aggregate(data, aggregations) {
-        const results = {};
-        
-        Object.entries(aggregations).forEach(([name, config]) => {
-            const field = config.field;
-            const operation = config.operation;
-            
-            switch (operation) {
-                case 'sum':
-                    results[name] = data.reduce((sum, item) => sum + (item[field] || 0), 0);
-                    break;
-                    
-                case 'avg':
-                    const sum = data.reduce((s, item) => s + (item[field] || 0), 0);
-                    results[name] = data.length > 0 ? sum / data.length : 0;
-                    break;
-                    
-                case 'count':
-                    results[name] = data.length;
-                    break;
-                    
-                case 'min':
-                    results[name] = Math.min(...data.map(item => item[field] || 0));
-                    break;
-                    
-                case 'max':
-                    results[name] = Math.max(...data.map(item => item[field] || 0));
-                    break;
-                    
-                case 'distinct':
-                    results[name] = new Set(data.map(item => item[field])).size;
-                    break;
-            }
-        });
-        
-        return results;
-    }
-    
-    /**
-     * Filtra dados localmente
-     * @param {Array} data - Dados para filtrar
-     * @param {Object} filters - Filtros a aplicar
-     * @returns {Array} Dados filtrados
-     */
-    filterData(data, filters) {
-        return data.filter(item => {
-            return Object.entries(filters).every(([field, value]) => {
-                if (!value) return true;
-                
-                const itemValue = item[field];
-                
-                // Suporta múltiplos valores
-                if (Array.isArray(value)) {
-                    return value.includes(itemValue);
-                }
-                
-                // Comparação simples
-                return itemValue === value;
-            });
-        });
-    }
-    
-    /**
-     * Ordena dados
-     * @param {Array} data - Dados para ordenar
-     * @param {string} field - Campo para ordenar
-     * @param {string} direction - 'asc' ou 'desc'
-     * @returns {Array} Dados ordenados
-     */
-    sortData(data, field, direction = 'asc') {
-        return [...data].sort((a, b) => {
-            const aVal = a[field];
-            const bVal = b[field];
-            
-            if (aVal === null || aVal === undefined) return 1;
-            if (bVal === null || bVal === undefined) return -1;
-            
-            if (aVal < bVal) return direction === 'asc' ? -1 : 1;
-            if (aVal > bVal) return direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-    }
+    return metadata;
+  }
+  
+  /**
+   * Agrupa dados por campo
+   * @param {Array} data - Dados a agrupar
+   * @param {string} field - Campo para agrupamento
+   * @returns {Object} Dados agrupados
+   */
+  groupBy(data, field) {
+    return data.reduce((groups, item) => {
+      const key = item[field];
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(item);
+      return groups;
+    }, {});
+  }
+  
+  /**
+   * Ordena dados
+   * @param {Array} data - Dados a ordenar
+   * @param {string} field - Campo para ordenação
+   * @param {string} direction - 'asc' ou 'desc'
+   * @returns {Array} Dados ordenados
+   */
+  sortBy(data, field, direction = 'asc') {
+    return [...data].sort((a, b) => {
+      const aVal = a[field];
+      const bVal = b[field];
+      
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+      
+      if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
 }
-
-// Exporta instância única
-const dataProcessor = new DataProcessor();
 
 // Exporta para diferentes ambientes
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = dataProcessor;
+  module.exports = DataProcessor;
 } else if (typeof define === 'function' && define.amd) {
-    define([], function() { return dataProcessor; });
+  define([], function() { return DataProcessor; });
 } else {
-    window.dataProcessor = dataProcessor;
+  window.DataProcessor = DataProcessor;
 }
