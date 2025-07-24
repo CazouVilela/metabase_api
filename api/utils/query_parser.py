@@ -49,6 +49,7 @@ class QueryParser:
         'campanha': 'campaign_name',
         'adset': 'adset_name',
         'ad_name': 'ad_name',
+        'anuncio': 'ad_name',
         'plataforma': 'publisher_platform',
         'posicao': 'platform_position',
         'device': 'impression_device',
@@ -82,26 +83,41 @@ class QueryParser:
         'minutes': 'minutes'
     }
     
+
     def apply_filters(self, query: str, filters: Dict[str, Any]) -> str:
         """Substitui template tags pelos valores dos filtros"""
         query_processed = query
-        
+    
         print(f"\n🔧 Substituindo template tags:")
         print(f"   Filtros recebidos: {list(filters.keys())}")
-        
+    
         # Processa cada filtro disponível
         for filter_name, value in filters.items():
             if not value:
                 continue
-                
-            # Padrão genérico para qualquer template tag
-            pattern = f"[[AND {{{{{filter_name}}}}}]]"
             
+            # Obtém o nome do campo SQL (pode ser mapeado)
+            sql_field_name = self.FIELD_MAPPING.get(filter_name, filter_name)
+        
+            # Tenta com o nome original primeiro
+            pattern = f"[[AND {{{{{filter_name}}}}}]]"
+            pattern_found = False
+        
             # Verifica se o padrão existe na query
             if pattern in query_processed:
+                pattern_found = True
+            # Se não encontrar, tenta com o nome mapeado (se for diferente)
+            elif sql_field_name != filter_name:
+                pattern_mapped = f"[[AND {{{{{sql_field_name}}}}}]]"
+                if pattern_mapped in query_processed:
+                    pattern = pattern_mapped  # Usa o padrão mapeado
+                    pattern_found = True
+                    print(f"   🔄 Usando mapeamento: {filter_name} → {sql_field_name}")
+        
+            if pattern_found:
                 # Constrói a cláusula SQL
                 sql_clause = self._build_sql_clause(filter_name, value)
-                
+            
                 if sql_clause:
                     replacement = f"AND {sql_clause}"
                     query_processed = query_processed.replace(pattern, replacement)
@@ -112,15 +128,16 @@ class QueryParser:
                     print(f"   ⚠️ Removido: {filter_name} (sem valor)")
             else:
                 print(f"   ⚠️ Tag não encontrada na query: {filter_name}")
-        
+    
         # Remove template tags restantes
         query_processed = self._remove_unused_tags(query_processed)
-        
+    
         # Remove espaços extras e linhas vazias
         query_processed = re.sub(r'\n\s*\n', '\n', query_processed)
-        
-        return query_processed
     
+        return query_processed
+
+
     def _build_sql_clause(self, field: str, value: Any) -> str:
         """Constrói cláusula SQL para um filtro"""
         if not value:
