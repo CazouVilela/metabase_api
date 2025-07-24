@@ -1,4 +1,4 @@
-# Documentação Técnica Completa - Metabase Customizações v3.1
+# Documentação Técnica Completa - Metabase Customizações v3.2
 
 ## Índice
 
@@ -8,7 +8,7 @@
 4. [API Backend (Flask)](#4-api-backend-flask)
 5. [Frontend (Componentes)](#5-frontend-componentes)
 6. [Fluxos de Dados](#6-fluxos-de-dados)
-7. [Sistema de Filtros de Data](#7-sistema-de-filtros-de-data)
+7. [Sistema de Filtros](#7-sistema-de-filtros)
 8. [Configuração e Deploy](#8-configuração-e-deploy)
 9. [Otimizações e Performance](#9-otimizações-e-performance)
 10. [Troubleshooting](#10-troubleshooting)
@@ -27,6 +27,7 @@ Sistema de customização para Metabase que permite criar componentes interativo
 - **Cache Inteligente**: Redis com compressão gzip e TTL configurável
 - **Filtros Dinâmicos**: Captura automática com suporte a múltiplos valores e caracteres especiais
 - **Parser de Datas Avançado**: Suporte completo para filtros relativos dinâmicos (v3.1)
+- **Mapeamento Inteligente**: Sistema flexível de mapeamento de parâmetros (v3.2)
 - **Virtualização**: Renderização eficiente de grandes volumes de dados (600k+ linhas)
 - **Formato Colunar**: Otimização de memória usando formato nativo do Metabase
 - **Monitoramento Automático**: Detecção e atualização em tempo real de mudanças de filtros
@@ -62,7 +63,7 @@ Sistema de customização para Metabase que permite criar componentes interativo
 [Nginx :8080]
         ↓ (proxy)
 [Flask API :3500]
-        ↓ (QueryParser processa filtros)
+        ↓ (QueryParser processa filtros e mapeamentos)
         ↓ (extrai e modifica query)
 [PostgreSQL :5432]
         ↓ (dados formato colunar)
@@ -80,7 +81,7 @@ Sistema de customização para Metabase que permite criar componentes interativo
 - **Query Service**: Executa queries com pool de conexões
 - **Metabase Service**: Comunica com API do Metabase
 - **Cache Service**: Gerencia cache Redis
-- **Query Parser**: Processa template tags e filtros de data dinâmicos (v3.1)
+- **Query Parser**: Processa template tags, filtros de data dinâmicos e mapeamentos (v3.2)
 
 #### Frontend
 - **Filter Manager**: Captura e monitora filtros automaticamente
@@ -100,7 +101,7 @@ metabase_customizacoes/
 │   ├── routes/                   # Endpoints
 │   ├── services/                 # Lógica de negócio
 │   └── utils/                    # Utilitários
-│       └── query_parser.py       # Parser de queries e filtros (v3.1)
+│       └── query_parser.py       # Parser de queries, filtros e mapeamentos (v3.2)
 ├── componentes/                  # Frontend
 │   ├── recursos_compartilhados/  # JS/CSS reutilizável
 │   │   ├── js/
@@ -127,7 +128,7 @@ metabase_customizacoes/
 ### 3.2 Arquivos Principais
 - `api/server.py`: Servidor Flask principal
 - `api/services/query_service.py`: Execução de queries
-- `api/utils/query_parser.py`: Parser avançado de queries e filtros de data (v3.1)
+- `api/utils/query_parser.py`: Parser avançado de queries, filtros e mapeamentos (v3.2)
 - `componentes/recursos_compartilhados/js/filter-manager.js`: Monitor automático de filtros
 - `componentes/tabela_virtual/js/main.js`: App com formato colunar
 - `componentes/tabela_virtual/js/virtual-table.js`: Renderização otimizada
@@ -159,7 +160,7 @@ def create_app():
 
 **Parâmetros**:
 - `question_id` (int): ID da pergunta no Metabase
-- `[filtros]`: Qualquer filtro dinâmico, incluindo filtros de data relativos
+- `[filtros]`: Qualquer filtro dinâmico, incluindo filtros de data relativos e nomes mapeados
 
 **Exemplo de filtros de data suportados** (v3.1):
 - `data=past7days`: últimos 7 dias (sem incluir hoje)
@@ -170,6 +171,10 @@ def create_app():
 - `data=next30days~`: próximos 30 dias incluindo hoje
 - `data=thisday`: hoje (Metabase usa "thisday" em vez de "today")
 - `data=2024-01-01~2024-12-31`: intervalo específico
+
+**Exemplo de mapeamentos suportados** (v3.2):
+- `anuncio=MeuAd123`: mapeado para `ad_name='MeuAd123'`
+- `conta=Empresa`: mapeado para `account_name='Empresa'`
 
 **Resposta** (Formato Colunar):
 ```json
@@ -197,6 +202,29 @@ def create_app():
 - Pool de conexões persistente (20 conexões)
 - work_mem aumentado para 256MB
 - Cache Redis com compressão gzip
+
+### 4.4 Query Parser (`api/utils/query_parser.py`)
+
+**Mapeamento Inteligente de Parâmetros (v3.2)**:
+
+O `QueryParser` agora implementa busca inteligente de template tags:
+
+```python
+def apply_filters(self, query: str, filters: Dict[str, Any]) -> str:
+    """
+    Substitui template tags pelos valores dos filtros
+    
+    v3.2: Implementa busca em duas etapas:
+    1. Tenta encontrar [[AND {{parametro}}]]
+    2. Se não encontrar e houver mapeamento, tenta [[AND {{campo_mapeado}}]]
+    """
+```
+
+**Características**:
+- Zero configuração adicional necessária
+- Compatibilidade retroativa garantida
+- Logs informativos quando usa mapeamento
+- Suporte a sinônimos e múltiplas línguas
 
 ---
 
@@ -228,7 +256,8 @@ filterManager.onChange((filters) => {
 const apiClient = new MetabaseAPIClient();
 const data = await apiClient.queryData(questionId, {
     conta: 'EMPRESA XYZ',
-    data: 'past7days~'
+    data: 'past7days~',
+    anuncio: 'MeuAnuncio123'  // v3.2: mapeado automaticamente
 });
 ```
 
@@ -246,12 +275,12 @@ const data = await apiClient.queryData(questionId, {
 
 ## 6. Fluxos de Dados
 
-### 6.1 Fluxo com Monitoramento Automático
+### 6.1 Fluxo com Monitoramento Automático e Mapeamento
 
 ```
 1. Dashboard Metabase
-   - Usuário muda filtro de data para "Últimas 8 semanas"
-   - URL atualiza: ?data=past8weeks
+   - Usuário seleciona filtro "anúncio" = "MeuAd123"
+   - URL atualiza: ?anuncio=MeuAd123
    
 2. FilterManager (monitoramento ativo)
    - Verifica URL a cada 1 segundo
@@ -260,16 +289,17 @@ const data = await apiClient.queryData(questionId, {
    
 3. App.loadData() é chamado
    - Captura filtros atuais
-   - Envia para API: data=past8weeks
+   - Envia para API: anuncio=MeuAd123
    
-4. QueryParser processa
-   - Detecta filtro relativo "past8weeks"
-   - Calcula datas: 2025-05-25 até 2025-07-19
-   - Substitui template tag: date BETWEEN '2025-05-25' AND '2025-07-19'
+4. QueryParser processa (v3.2)
+   - Busca [[AND {{anuncio}}]] na query (não encontra)
+   - Consulta mapeamento: anuncio → ad_name
+   - Busca [[AND {{ad_name}}]] na query (encontra!)
+   - Substitui template tag: AND ad_name = 'MeuAd123'
    
 5. Backend executa query
    - Mantém formato colunar
-   - Retorna dados otimizados
+   - Retorna dados filtrados
    
 6. Frontend renderiza
    - Usa formato colunar se disponível
@@ -278,7 +308,7 @@ const data = await apiClient.queryData(questionId, {
 
 ---
 
-## 7. Sistema de Filtros de Data
+## 7. Sistema de Filtros
 
 ### 7.1 Parser Dinâmico de Datas (v3.1)
 
@@ -354,6 +384,60 @@ Principais características:
 - Usa `relativedelta` para meses/anos (mais preciso)
 - Semanas começam no domingo (padrão Metabase)
 - Trimestres seguem calendário fiscal (Q1=Jan-Mar)
+
+### 7.3 Mapeamento de Parâmetros (v3.2)
+
+O sistema suporta mapeamento automático de parâmetros do dashboard para campos SQL, permitindo flexibilidade nos nomes dos filtros.
+
+#### 7.3.1 Configuração de Mapeamento
+
+O mapeamento é definido em `api/utils/query_parser.py`:
+
+```python
+FIELD_MAPPING = {
+    'data': 'date',
+    'conta': 'account_name',
+    'campanha': 'campaign_name',
+    'adset': 'adset_name',
+    'ad_name': 'ad_name',
+    'anuncio': 'ad_name',      # Sinônimo para ad_name
+    'plataforma': 'publisher_platform',
+    'posicao': 'platform_position',
+    'device': 'impression_device',
+    'objective': 'objective',
+    'optimization_goal': 'optimization_goal',
+    'buying_type': 'buying_type',
+    'action_type_filter': 'action_type'
+}
+```
+
+#### 7.3.2 Funcionamento do Mapeamento Inteligente (v3.2)
+
+O parser agora tenta encontrar template tags de duas formas:
+
+1. **Busca direta**: Procura `[[AND {{nome_parametro}}]]`
+2. **Busca mapeada**: Se não encontrar, procura `[[AND {{campo_sql_mapeado}}]]`
+
+**Exemplo prático**:
+- Dashboard envia: `anuncio=MeuAnuncio123`
+- Parser procura: `[[AND {{anuncio}}]]` (não encontra)
+- Parser então procura: `[[AND {{ad_name}}]]` (encontra!)
+- Aplica filtro: `AND ad_name = 'MeuAnuncio123'`
+
+#### 7.3.3 Casos de Uso
+
+1. **Múltiplos dashboards com nomenclaturas diferentes**:
+   - Dashboard A usa filtro "anuncio"
+   - Dashboard B usa filtro "ad_name"
+   - Ambos funcionam com a mesma query SQL
+
+2. **Migração gradual**:
+   - Permite renomear filtros no dashboard sem quebrar queries existentes
+   - Suporta período de transição com ambos os nomes
+
+3. **Localização**:
+   - Dashboards em português podem usar "anuncio"
+   - Dashboards em inglês podem usar "ad_name"
 
 ---
 
@@ -465,6 +549,34 @@ SET random_page_cost = 1.1;
 
 ### 10.1 Problemas Comuns
 
+#### "Filtro do dashboard não é aplicado no iframe" (v3.2)
+
+**Sintomas**:
+- Log mostra: `⚠️ Tag não encontrada na query: nome_do_filtro`
+- Dados não são filtrados no iframe, mas funcionam no dashboard nativo
+
+**Causas possíveis**:
+1. Nome do filtro no dashboard não corresponde ao template tag na query
+2. Falta mapeamento para o nome usado
+
+**Solução v3.2**:
+1. Verificar o nome exato do template tag na query SQL
+2. Adicionar mapeamento em `FIELD_MAPPING` se necessário:
+   ```python
+   'nome_usado_no_dashboard': 'nome_do_campo_sql'
+   ```
+3. Reiniciar o servidor Flask
+
+**Exemplo de debug**:
+```
+# Log antes do fix:
+⚠️ Tag não encontrada na query: anuncio
+
+# Log após adicionar mapeamento:
+🔄 Usando mapeamento: anuncio → ad_name
+✅ Substituído: anuncio -> ad_name = 'MeuAnuncio123'...
+```
+
 #### "Filtro de data retorna 0 linhas"
 **Causas possíveis**:
 1. Template tag mal configurado no Metabase
@@ -530,7 +642,36 @@ app.getStats()
    # Verificar logs do servidor para datas calculadas
    ```
 
-### 11.2 Melhores Práticas
+### 11.2 Adicionar Suporte a Novo Nome de Filtro (v3.2)
+
+Se um filtro do dashboard não está sendo aplicado:
+
+1. **Identificar o problema**:
+   ```
+   # No log do Flask:
+   ⚠️ Tag não encontrada na query: novo_filtro
+   ```
+
+2. **Verificar o template tag na query SQL**:
+   ```sql
+   [[AND {{nome_campo_sql}}]]
+   ```
+
+3. **Adicionar mapeamento**:
+   ```python
+   # Em api/utils/query_parser.py
+   FIELD_MAPPING = {
+       # ... outros mapeamentos ...
+       'novo_filtro': 'nome_campo_sql',  # Adicionar esta linha
+   }
+   ```
+
+4. **Testar**:
+   - Reiniciar servidor
+   - Aplicar filtro no dashboard
+   - Verificar log: `🔄 Usando mapeamento: novo_filtro → nome_campo_sql`
+
+### 11.3 Melhores Práticas
 
 1. **Performance**:
    - Sempre preferir formato colunar para > 100k linhas
@@ -542,14 +683,62 @@ app.getStats()
    - Verificar logs para confirmar datas
    - Considerar timezone (servidor usa hora local)
 
-3. **Debug**:
+3. **Mapeamentos** (v3.2):
+   - Mantenha nomes descritivos
+   - Documente sinônimos
+   - Considere retrocompatibilidade
+
+4. **Debug**:
    - Ativar DEBUG=true no .env para logs detalhados
    - Usar ferramentas do navegador para monitorar memória
    - Verificar Network tab para ver tamanho das respostas
 
+### 11.4 Melhores Práticas para Mapeamentos (v3.2)
+
+1. **Mantenha nomes descritivos**:
+   ```python
+   'conta': 'account_name',        # ✅ Claro e intuitivo
+   'c': 'account_name',            # ❌ Muito abreviado
+   ```
+
+2. **Documente sinônimos**:
+   ```python
+   'ad_name': 'ad_name',          # Nome original em inglês
+   'anuncio': 'ad_name',          # Sinônimo em português
+   'advertisement': 'ad_name',     # Variação em inglês
+   ```
+
+3. **Considere retrocompatibilidade**:
+   - Sempre mantenha mapeamentos antigos
+   - Adicione novos sem remover existentes
+   - Teste com dashboards existentes
+
 ---
 
 ## 12. Changelog
+
+### v3.2.0 (23/07/2025)
+
+#### 🚀 Mapeamento Inteligente de Parâmetros
+- Sistema de mapeamento flexível para nomes de filtros
+- Busca em duas etapas: nome original → nome mapeado
+- Suporte a sinônimos (ex: "anuncio" → "ad_name")
+- Permite múltiplos dashboards com nomenclaturas diferentes
+
+#### 🐛 Correções
+- ✅ Corrigido filtro "anuncio" não sendo aplicado no iframe
+- ✅ Melhorado sistema de detecção de template tags
+- ✅ Adicionados logs para debug de mapeamentos
+
+#### 📝 Melhorias
+- Logs mostram quando mapeamento é utilizado
+- Documentação de troubleshooting atualizada
+- Exemplos práticos de uso de mapeamentos
+
+#### 🔧 Mudanças Técnicas
+- Modificado `QueryParser.apply_filters()` para busca inteligente
+- Adicionado suporte a sinônimos em `FIELD_MAPPING`
+- Melhorada detecção de template tags na query
 
 ### v3.1.0 (23/07/2025)
 
@@ -597,11 +786,29 @@ app.getStats()
 
 ---
 
+## Resumo das Mudanças v3.2
+
+**Problema Resolvido**: Filtros do dashboard com nomes diferentes dos template tags SQL não eram aplicados.
+
+**Solução Implementada**: Sistema de mapeamento inteligente que tenta encontrar template tags tanto com o nome original do parâmetro quanto com o nome mapeado.
+
+**Impacto**: 
+- Zero breaking changes
+- Suporte a múltiplas nomenclaturas
+- Facilita internacionalização
+- Melhora flexibilidade do sistema
+
+**Arquivos Modificados**:
+- `api/utils/query_parser.py`: Adicionado mapeamento e lógica de busca inteligente
+- `docs/TECHNICAL_DOCUMENTATION.md`: Documentação atualizada
+
+---
+
 ## Sobre Esta Documentação
 
-**Versão**: 3.1.0  
+**Versão**: 3.2.0  
 **Última Atualização**: 23 de Julho de 2025  
-**Principais Mudanças**: Parser de datas dinâmico completo, correção de comportamento de filtros
+**Principais Mudanças**: Sistema de mapeamento inteligente de parâmetros, correção de filtros não aplicados
 
 ### Manutenção
 
@@ -610,7 +817,8 @@ Para manter esta documentação atualizada:
 2. Atualize exemplos de código quando modificar APIs
 3. Adicione novos casos de troubleshooting descobertos
 4. Mantenha a seção de filtros de data atualizada com novos padrões
+5. Adicione novos mapeamentos conforme necessário
 
 ---
 
-**Fim da Documentação Técnica v3.1**
+**Fim da Documentação Técnica v3.2**
