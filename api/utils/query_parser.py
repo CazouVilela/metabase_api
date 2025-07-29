@@ -56,7 +56,8 @@ class QueryParser:
         'objective': 'objective',
         'optimization_goal': 'optimization_goal',
         'buying_type': 'buying_type',
-        'action_type_filter': 'action_type'
+        'action_type_filter': 'action_type',
+        'conversoes_consideradas': 'conversoes_consideradas'  # Field Filter especial para JSON
     }
     
     # Campos problemáticos conhecidos
@@ -87,13 +88,51 @@ class QueryParser:
     def apply_filters(self, query: str, filters: Dict[str, Any]) -> str:
         """Substitui template tags pelos valores dos filtros"""
         query_processed = query
+        
+        # Guarda referência aos filtros para uso em _remove_unused_tags
+        self.current_filters = filters
     
         print(f"\n🔧 Substituindo template tags:")
         print(f"   Filtros recebidos: {list(filters.keys())}")
+        
+        # PRIMEIRO: Tratamento especial para conversoes_consideradas dentro de EXISTS
+        # Isso precisa ser feito antes do loop principal
+        if '{{conversoes_consideradas}}' in query_processed:
+            conversoes_values = filters.get('conversoes_consideradas')
+            if conversoes_values:
+                # Se tem valores, processa normalmente
+                if isinstance(conversoes_values, list):
+                    formatted_values = ", ".join(f"'{self._escape_sql_value(v)}'" for v in conversoes_values)
+                    replacement = f"action_type IN ({formatted_values})"
+                else:
+                    # Valor único
+                    replacement = f"action_type = '{self._escape_sql_value(conversoes_values)}'"
+                
+                # Substitui {{conversoes_consideradas}} dentro do bloco EXISTS
+                query_processed = query_processed.replace('{{conversoes_consideradas}}', replacement)
+                print(f"   ✅ Substituído: conversoes_consideradas -> {replacement[:50]}...")
+                
+                # Remove os colchetes duplos [[]] ao redor do bloco EXISTS quando o filtro é aplicado
+                query_processed = re.sub(
+                    r'\[\[(AND\s+EXISTS\s*\([^]]+)\]\]',
+                    r'\1',
+                    query_processed,
+                    flags=re.DOTALL | re.IGNORECASE
+                )
+                print(f"   🔧 Removidos colchetes [[]] do bloco EXISTS")
+            else:
+                # Se conversoes_consideradas não tem valor, remove todo o bloco [[AND EXISTS(...)]]
+                query_processed = re.sub(
+                    r'\[\[AND\s+EXISTS\s*\([^]]+{{conversoes_consideradas}}[^]]+\]\]',
+                    '',
+                    query_processed,
+                    flags=re.DOTALL | re.IGNORECASE
+                )
+                print(f"   🔹 Removido bloco [[AND EXISTS(...)]] - filtro conversoes_consideradas vazio")
     
-        # Processa cada filtro disponível
+        # SEGUNDO: Processa outros filtros
         for filter_name, value in filters.items():
-            if not value:
+            if not value or filter_name == 'conversoes_consideradas':
                 continue
             
             # Obtém o nome do campo SQL (pode ser mapeado)
@@ -623,6 +662,28 @@ class QueryParser:
     
     def _remove_unused_tags(self, query: str) -> str:
         """Remove template tags não utilizados"""
+        
+        # Tratamento especial para conversoes_consideradas (v3.3)
+        if hasattr(self, 'current_filters') and 'conversoes_consideradas' in self.current_filters:
+            conversoes_values = self.current_filters.get('conversoes_consideradas')
+            if conversoes_values:
+                # Se é uma lista, junta com vírgulas e adiciona aspas
+                if isinstance(conversoes_values, list):
+                    formatted_values = ", ".join(f"'{self._escape_sql_value(v)}'" for v in conversoes_values)
+                    in_clause = f"IN ({formatted_values})"
+                else:
+                    # Valor único
+                    in_clause = f"= '{self._escape_sql_value(conversoes_values)}'"
+                
+                # Substitui o padrão específico do Field Filter
+                query = re.sub(
+                    r'WHERE\s+{{\s*conversoes_consideradas\s*}}',
+                    f'WHERE action_type {in_clause}',
+                    query,
+                    flags=re.IGNORECASE
+                )
+                print(f"   ✅ Substituído: conversoes_consideradas -> action_type {in_clause[:50]}...")
+        
         # Remove tags dentro de [[AND {{...}}]]
         tags_restantes = re.findall(r'\[\[AND \{\{[^}]+\}\}\]\]', query)
         if tags_restantes:
@@ -797,4 +858,12 @@ class QueryParser:
         today = datetime.now().date()
         start = today.replace(year=today.year + 1, month=1, day=1)
         end = today.replace(year=today.year + 1, month=12, day=31)
+        return start, end
+    
+    @staticmethod
+    def _get_last_year():
+        """Retorna início e fim do ano passado"""
+        today = datetime.now().date()
+        start = today.replace(year=today.year - 1, month=1, day=1)
+        end = today.replace(year=today.year - 1, month=12, day=31)
         return start, end

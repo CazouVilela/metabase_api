@@ -1,4 +1,4 @@
-# Documentação Técnica Completa - Metabase Customizações v3.2
+# Documentação Técnica Completa - Metabase Customizações v3.3
 
 ## Índice
 
@@ -15,6 +15,37 @@
 11. [Guia de Desenvolvimento](#11-guia-de-desenvolvimento)
 12. [Changelog](#12-changelog)
 
+### 11.6 Testando Filtros Complexos (v3.3)
+
+Para testar filtros como `conversoes_consideradas`:
+
+1. **No Metabase nativo**:
+   - Aplicar filtro com múltiplos valores
+   - Verificar se filtra corretamente
+   - Testar sem nenhum valor selecionado
+
+2. **No iframe**:
+   - Verificar logs do Flask:
+     ```
+     Com valores:
+     ✅ Substituído: conversoes_consideradas -> action_type IN ('valor1', 'valor2'...
+     🔧 Removidos colchetes [[]] do bloco EXISTS
+     
+     Sem valores:
+     🔹 Removido bloco [[AND EXISTS(...)]] - filtro conversoes_consideradas vazio
+     ```
+
+3. **Casos de teste**:
+   - Filtro vazio: deve mostrar todas as linhas
+   - Um valor: deve filtrar por esse valor
+   - Múltiplos valores: deve mostrar linhas com qualquer um dos valores
+   - Combinado com outros filtros: deve aplicar todos os filtros
+
+4. **Debug comum**:
+   - Erro "sintaxe em ou próximo a '['": bloco não foi removido corretamente
+   - "Tag não encontrada": verificar nome exato na query
+   - Filtro não aplicado: verificar tratamento especial no parser
+
 ---
 
 ## 1. Visão Geral
@@ -28,6 +59,7 @@ Sistema de customização para Metabase que permite criar componentes interativo
 - **Filtros Dinâmicos**: Captura automática com suporte a múltiplos valores e caracteres especiais
 - **Parser de Datas Avançado**: Suporte completo para filtros relativos dinâmicos (v3.1)
 - **Mapeamento Inteligente**: Sistema flexível de mapeamento de parâmetros (v3.2)
+- **Filtros JSON**: Suporte a filtragem por conteúdo de campos JSONB (v3.3)
 - **Virtualização**: Renderização eficiente de grandes volumes de dados (600k+ linhas)
 - **Formato Colunar**: Otimização de memória usando formato nativo do Metabase
 - **Monitoramento Automático**: Detecção e atualização em tempo real de mudanças de filtros
@@ -176,6 +208,10 @@ def create_app():
 - `anuncio=MeuAd123`: mapeado para `ad_name='MeuAd123'`
 - `conta=Empresa`: mapeado para `account_name='Empresa'`
 
+**Exemplo de filtros JSON suportados** (v3.3):
+- `conversoes_consideradas=contact_website`: filtra linhas onde o JSON contém este action_type
+- `conversoes_consideradas=contact_website,subscribe_website`: múltiplos valores
+
 **Resposta** (Formato Colunar):
 ```json
 {
@@ -257,7 +293,8 @@ const apiClient = new MetabaseAPIClient();
 const data = await apiClient.queryData(questionId, {
     conta: 'EMPRESA XYZ',
     data: 'past7days~',
-    anuncio: 'MeuAnuncio123'  // v3.2: mapeado automaticamente
+    anuncio: 'MeuAnuncio123',  // v3.2: mapeado automaticamente
+    conversoes_consideradas: ['contact_website', 'subscribe_website'] // v3.3: filtro JSON
 });
 ```
 
@@ -407,7 +444,8 @@ FIELD_MAPPING = {
     'objective': 'objective',
     'optimization_goal': 'optimization_goal',
     'buying_type': 'buying_type',
-    'action_type_filter': 'action_type'
+    'action_type_filter': 'action_type',
+    'conversoes_consideradas': 'conversoes_consideradas' # v3.3: filtro especial JSON
 }
 ```
 
@@ -438,6 +476,103 @@ O parser agora tenta encontrar template tags de duas formas:
 3. **Localização**:
    - Dashboards em português podem usar "anuncio"
    - Dashboards em inglês podem usar "ad_name"
+
+#### 7.3.4 Filtros Especiais
+
+Alguns filtros têm comportamento especial e não seguem o padrão de mapeamento:
+
+1. **conversoes_consideradas** (v3.3): 
+   - Tipo: Field Filter com lógica customizada
+   - Não usa sintaxe padrão `[[AND {{campo}}]]`
+   - Usa estrutura `[[AND EXISTS(...)]]` com a tag dentro
+   - Filtra baseado em conteúdo JSON
+   - Requer tratamento especial no parser Python:
+     - Substitui tag dentro da estrutura EXISTS
+     - Remove colchetes `[[]]` quando tem valor
+     - Remove bloco completo quando vazio
+   - Configuração no Metabase:
+     - Field Filter mapeado para `view_conversions_action_types_list.action_type`
+     - Suporta múltipla seleção nativa
+
+### 7.4 Filtro de Conversões por Action Type (v3.3)
+
+O sistema suporta filtragem de linhas baseada em valores contidos em campos JSON, especificamente para o campo `conversions` que contém um array de objetos com `action_type` e `value`.
+
+#### 7.4.1 Funcionamento do Filtro
+
+O filtro `conversoes_consideradas` permite:
+- **Seleção múltipla** de action types no dashboard
+- **Filtragem por conteúdo JSON**: mostra apenas linhas onde o JSON contém pelo menos um dos tipos selecionados
+- **Comportamento padrão**: sem seleção, mostra TODAS as linhas (incluindo NULL)
+
+#### 7.4.2 Implementação na Query SQL
+
+```sql
+-- Filtro opcional que verifica se existe match no JSON
+[[AND EXISTS (
+  SELECT 1 
+  FROM jsonb_array_elements(conversions) AS elem
+  WHERE elem->>'action_type' IN (
+    SELECT action_type 
+    FROM road.view_conversions_action_types_list
+    WHERE {{conversoes_consideradas}}
+  )
+)]]
+```
+
+#### 7.4.3 Configuração no Metabase
+
+1. **Variável**:
+   - Nome: `conversoes_consideradas`
+   - Tipo: **Field Filter**
+   - Campo mapeado: `road.view_conversions_action_types_list.action_type`
+   - Widget: Dropdown list
+
+2. **No Dashboard**:
+   - Tipo: Dropdown list
+   - Permite múltipla seleção: ✅
+   - Valores: Automaticamente populados da tabela
+
+#### 7.4.4 Particularidades Técnicas
+
+- Usa `jsonb_array_elements()` para expandir o array JSON
+- Operador `->>'action_type'` extrai o valor como texto
+- Subquery com `EXISTS` garante performance
+- Template tag `[[...]]` torna o filtro opcional
+
+#### 7.4.5 Implementação no Parser Python (v3.3)
+
+O filtro `conversoes_consideradas` requer tratamento especial no `QueryParser` devido à sua estrutura complexa:
+
+```python
+# Em query_parser.py - apply_filters()
+
+# PRIMEIRO: Tratamento especial para conversoes_consideradas
+if '{{conversoes_consideradas}}' in query_processed:
+    conversoes_values = filters.get('conversoes_consideradas')
+    if conversoes_values:
+        # Se tem valores, formata e substitui
+        if isinstance(conversoes_values, list):
+            formatted_values = ", ".join(f"'{v}'" for v in conversoes_values)
+            replacement = f"action_type IN ({formatted_values})"
+        else:
+            replacement = f"action_type = '{conversoes_values}'"
+        
+        # Substitui a tag e remove [[]] para ativar o EXISTS
+        query_processed = query_processed.replace('{{conversoes_consideradas}}', replacement)
+        query_processed = re.sub(r'\[\[(AND\s+EXISTS\s*\([^]]+)\]\]', r'\1', query_processed)
+    else:
+        # Se não tem valor, remove todo o bloco [[AND EXISTS(...)]]
+        query_processed = re.sub(
+            r'\[\[AND\s+EXISTS\s*\([^]]+{{conversoes_consideradas}}[^]]+\]\]',
+            '',
+            query_processed
+        )
+```
+
+**Comportamento**:
+- **Com valores**: Substitui a tag e ativa o filtro EXISTS
+- **Sem valores**: Remove completamente o bloco para mostrar todas as linhas
 
 ---
 
@@ -577,6 +712,39 @@ SET random_page_cost = 1.1;
 ✅ Substituído: anuncio -> ad_name = 'MeuAnuncio123'...
 ```
 
+#### "Filtro de conversões não funciona no iframe"
+
+**Sintomas**:
+- Filtro funciona no Metabase nativo mas não no iframe
+- Erro "sintaxe em ou próximo a '['" quando filtro está vazio
+- Log mostra "Tag não encontrada na query: conversoes_consideradas"
+
+**Solução v3.3**:
+O filtro `conversoes_consideradas` usa uma estrutura especial `[[AND EXISTS(...)]]` que requer tratamento customizado no parser.
+
+**Verificações**:
+1. Confirme que a query usa a estrutura correta:
+   ```sql
+   [[AND EXISTS (
+     SELECT 1 FROM jsonb_array_elements(conversions) AS elem
+     WHERE elem->>'action_type' IN (
+       SELECT action_type FROM road.view_conversions_action_types_list
+       WHERE {{conversoes_consideradas}}
+     )
+   )]]
+   ```
+
+2. Verifique o mapeamento em `query_parser.py`:
+   ```python
+   'conversoes_consideradas': 'conversoes_consideradas'
+   ```
+
+3. Confirme que o parser trata este filtro especialmente no método `apply_filters()`
+
+**Comportamento esperado**:
+- Com valores selecionados: "✅ Substituído: conversoes_consideradas -> action_type IN..."
+- Sem valores: "🔹 Removido bloco [[AND EXISTS(...)]] - filtro conversoes_consideradas vazio"
+
 #### "Filtro de data retorna 0 linhas"
 **Causas possíveis**:
 1. Template tag mal configurado no Metabase
@@ -671,7 +839,47 @@ Se um filtro do dashboard não está sendo aplicado:
    - Aplicar filtro no dashboard
    - Verificar log: `🔄 Usando mapeamento: novo_filtro → nome_campo_sql`
 
-### 11.3 Melhores Práticas
+### 11.3 Adicionar Novo Filtro JSON (v3.3)
+
+Para adicionar filtros que verificam conteúdo JSON:
+
+1. **Criar a estrutura na query**:
+   ```sql
+   [[AND EXISTS (
+     SELECT 1 
+     FROM jsonb_array_elements(campo_json) AS elem
+     WHERE elem->>'campo_busca' IN (
+       SELECT campo FROM tabela_referencia
+       WHERE {{nome_variavel}}
+     )
+   )]]
+   ```
+
+2. **Configurar como Field Filter**:
+   - Mapear para a tabela de referência
+   - Configurar widget como dropdown
+
+3. **No dashboard**:
+   - A múltipla seleção estará disponível automaticamente
+
+4. **No parser Python**:
+   - Adicionar tratamento especial em `apply_filters()` se a estrutura for complexa
+   - Garantir que o bloco seja removido quando o filtro estiver vazio
+   - Exemplo do filtro `conversoes_consideradas`:
+     ```python
+     if '{{nome_variavel}}' in query_processed:
+         valores = filters.get('nome_variavel')
+         if valores:
+             # Substitui e ativa o bloco
+             replacement = formatar_valores(valores)
+             query_processed = query_processed.replace('{{nome_variavel}}', replacement)
+             query_processed = re.sub(r'\[\[(AND\s+EXISTS[^]]+)\]\]', r'\1', query_processed)
+         else:
+             # Remove todo o bloco se vazio
+             query_processed = re.sub(r'\[\[AND\s+EXISTS[^]]+{{nome_variavel}}[^]]+\]\]', '', query_processed)
+     ```
+
+### 11.4 Melhores Práticas
 
 1. **Performance**:
    - Sempre preferir formato colunar para > 100k linhas
@@ -688,12 +896,19 @@ Se um filtro do dashboard não está sendo aplicado:
    - Documente sinônimos
    - Considere retrocompatibilidade
 
-4. **Debug**:
+4. **Filtros JSON** (v3.3):
+   - Use EXISTS para melhor performance
+   - Sempre torne o filtro opcional com `[[...]]`
+   - Teste com valores NULL
+   - Implemente tratamento especial no parser para estruturas complexas
+   - Garanta remoção completa do bloco quando filtro está vazio
+
+5. **Debug**:
    - Ativar DEBUG=true no .env para logs detalhados
    - Usar ferramentas do navegador para monitorar memória
    - Verificar Network tab para ver tamanho das respostas
 
-### 11.4 Melhores Práticas para Mapeamentos (v3.2)
+### 11.5 Melhores Práticas para Mapeamentos (v3.2)
 
 1. **Mantenha nomes descritivos**:
    ```python
@@ -716,6 +931,37 @@ Se um filtro do dashboard não está sendo aplicado:
 ---
 
 ## 12. Changelog
+
+### v3.3.0 (29/07/2025)
+
+#### 🚀 Filtro de Conversões por Action Type
+- Implementado filtro especial para campos JSON
+- Suporte a múltipla seleção de action types
+- Filtragem baseada em conteúdo de arrays JSONB
+- Integração nativa com Field Filter do Metabase
+- Tratamento especial no parser para estrutura `[[AND EXISTS(...)]]`
+
+#### 🔧 Mudanças na Query
+- Adicionado filtro `conversoes_consideradas` com EXISTS
+- Mantida compatibilidade com valores NULL
+- Otimizada performance com subqueries
+
+#### 📝 Melhorias
+- Dashboard agora suporta filtro dropdown multi-seleção para conversões
+- Valores do filtro automaticamente populados de tabela auxiliar
+- Comportamento consistente com outros filtros do dashboard
+- Parser Python detecta e trata estrutura complexa do filtro
+
+#### ⚡ Correções
+- ✅ Corrigido problema onde filtro vazio causava erro de sintaxe SQL
+- ✅ Resolvido erro de referência de tabela no Field Filter
+- ✅ Ajustado parser para remover bloco EXISTS quando filtro está vazio
+- ✅ Implementado tratamento especial para tag dentro de estrutura EXISTS
+
+#### 🔧 Mudanças Técnicas
+- Modificado `QueryParser.apply_filters()` para tratar `conversoes_consideradas` antes dos outros filtros
+- Adicionada lógica para remover/ativar blocos `[[AND EXISTS(...)]]` dinamicamente
+- Melhorado `_remove_unused_tags()` para não interferir com tags especiais
 
 ### v3.2.0 (23/07/2025)
 
@@ -786,29 +1032,36 @@ Se um filtro do dashboard não está sendo aplicado:
 
 ---
 
-## Resumo das Mudanças v3.2
+## Resumo das Mudanças v3.3
 
-**Problema Resolvido**: Filtros do dashboard com nomes diferentes dos template tags SQL não eram aplicados.
+**Problema Resolvido**: Necessidade de filtrar dados baseado em valores contidos em campos JSON, com suporte a múltipla seleção no dashboard e compatibilidade no iframe.
 
-**Solução Implementada**: Sistema de mapeamento inteligente que tenta encontrar template tags tanto com o nome original do parâmetro quanto com o nome mapeado.
+**Solução Implementada**: 
+- Field Filter customizado que usa EXISTS com jsonb_array_elements
+- Parser Python com tratamento especial para estrutura `[[AND EXISTS(...)]]`
+- Lógica para remover bloco completo quando filtro está vazio
+- Substituição inteligente de tags dentro de estruturas complexas
 
 **Impacto**: 
-- Zero breaking changes
-- Suporte a múltiplas nomenclaturas
-- Facilita internacionalização
-- Melhora flexibilidade do sistema
+- Permite análise granular de tipos de conversão
+- Mantém interface consistente com outros filtros
+- Suporta múltipla seleção nativa do Metabase
+- Performance otimizada com subqueries
+- Funciona perfeitamente tanto no Metabase nativo quanto no iframe
 
 **Arquivos Modificados**:
-- `api/utils/query_parser.py`: Adicionado mapeamento e lógica de busca inteligente
+- Query SQL da pergunta 51 (adicionado filtro conversoes_consideradas com EXISTS)
+- `api/utils/query_parser.py`: Adicionado tratamento especial para conversoes_consideradas
+- Configuração de variável no Metabase como Field Filter
 - `docs/TECHNICAL_DOCUMENTATION.md`: Documentação atualizada
 
 ---
 
 ## Sobre Esta Documentação
 
-**Versão**: 3.2.0  
-**Última Atualização**: 23 de Julho de 2025  
-**Principais Mudanças**: Sistema de mapeamento inteligente de parâmetros, correção de filtros não aplicados
+**Versão**: 3.3.0  
+**Última Atualização**: 29 de Julho de 2025  
+**Principais Mudanças**: Filtro de conversões por action type com tratamento especial para estrutura EXISTS
 
 ### Manutenção
 
@@ -818,7 +1071,8 @@ Para manter esta documentação atualizada:
 3. Adicione novos casos de troubleshooting descobertos
 4. Mantenha a seção de filtros de data atualizada com novos padrões
 5. Adicione novos mapeamentos conforme necessário
+6. Documente novos filtros especiais (JSON, arrays, etc.)
 
 ---
 
-**Fim da Documentação Técnica v3.2**
+**Fim da Documentação Técnica v3.3**
