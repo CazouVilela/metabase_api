@@ -1,61 +1,74 @@
 // componentes/recursos_compartilhados/js/api-client.js
 /**
- * Cliente API compartilhado para comunicação com backend
+ * Cliente API unificado para comunicação com backend
  */
 
 class MetabaseAPIClient {
   constructor() {
-    this.baseUrl = this.detectBaseUrl();
+    this.baseUrl = window.location.origin + '/metabase_customizacoes';
     this.cache = new Map();
-    this.cacheTimeout = 5 * 60 * 1000; // 5 minutos
-    this.defaultTimeout = 5 * 60 * 1000; // 5 minutos para requests
+    this.cacheTimeout = 300000; // 5 minutos
     
-    console.log(`📡 API Client inicializado: ${this.baseUrl}`);
+    // Estatísticas
+    this.stats = {
+      requests: 0,
+      cacheHits: 0,
+      cacheMisses: 0
+    };
+    
+    console.log('📡 API Client inicializado:', this.baseUrl);
   }
   
   /**
-   * Detecta URL base automaticamente
-   */
-  detectBaseUrl() {
-    const path = window.location.pathname;
-    
-    // Se estiver em /metabase_customizacoes/componentes/...
-    const basePath = path.split('/componentes')[0];
-    
-    // Se não encontrar, usa vazio (relativo)
-    return basePath || '';
-  }
-  
-  /**
-   * Busca dados de uma pergunta com filtros
+   * Busca dados de uma query
    * @param {string|number} questionId - ID da pergunta
    * @param {Object} filters - Filtros a aplicar
-   * @returns {Promise<Object>} Dados da resposta
+   * @returns {Promise<Object>} Dados da query
    */
   async queryData(questionId, filters = {}) {
-    const cacheKey = this.getCacheKey(questionId, filters);
-    
-    // Verifica cache
-    const cached = this.getFromCache(cacheKey);
-    if (cached) {
-      console.log('📦 Dados retornados do cache');
-      return cached;
-    }
-    
     try {
-      const url = this.buildUrl('/api/query', {
-        question_id: questionId,
-        ...filters
+      // Gera chave do cache
+      const cacheKey = this.generateCacheKey(questionId, filters);
+      
+      // Desabilita cache temporariamente para evitar problemas
+      // TODO: Investigar problema com cache retornando dados vazios
+      /*
+      if (Object.keys(filters).length === 0) {
+        const cached = this.getFromCache(cacheKey);
+        if (cached && cached.data && cached.data.rows && cached.data.rows.length > 0) {
+          this.stats.cacheHits++;
+          console.log('📦 Dados válidos retornados do cache');
+          return cached;
+        }
+      }
+      */
+      
+      this.stats.cacheMisses++;
+      this.stats.requests++;
+      
+      // Monta URL com parâmetros
+      const url = new URL(`${this.baseUrl}/api/query`);
+      url.searchParams.append('question_id', questionId);
+      
+      // Adiciona filtros como parâmetros
+      Object.entries(filters).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          value.forEach(v => url.searchParams.append(key, v));
+        } else if (value !== null && value !== undefined && value !== '') {
+          url.searchParams.append(key, value);
+        }
       });
       
-      console.log(`🔄 Requisição para: ${url}`);
+      console.log('🔄 Requisição para:', url.toString());
       
-      const response = await this.fetchWithTimeout(url, {
+      // Faz requisição
+      const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'Accept-Encoding': 'gzip'
-        }
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin'
       });
       
       if (!response.ok) {
@@ -64,103 +77,46 @@ class MetabaseAPIClient {
       
       const data = await response.json();
       
-      // Adiciona ao cache
-      this.addToCache(cacheKey, data);
+      // Valida resposta
+      if (!data || !data.data || !data.data.rows) {
+        console.warn('⚠️ Resposta inválida da API:', data);
+        throw new Error('Resposta inválida da API');
+      }
+      
+      // Cache desabilitado temporariamente
+      /*
+      if (data.data.rows.length > 0 && Object.keys(filters).length === 0) {
+        this.setCache(cacheKey, data);
+      }
+      */
+      
+      console.log(`✅ Dados recebidos: ${data.data.rows.length} linhas (${data.data.cols.length} colunas)`);
+      
+      // Log de debug
+      if (data.data.rows.length === 0) {
+        console.warn('⚠️ API retornou 0 linhas - verifique os filtros ou a query');
+      }
       
       return data;
       
     } catch (error) {
-      console.error('❌ Erro na requisição:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Busca informações de uma pergunta
-   * @param {string|number} questionId - ID da pergunta
-   * @returns {Promise<Object>} Metadados da pergunta
-   */
-  async getQuestionInfo(questionId) {
-    try {
-      const url = this.buildUrl(`/api/question/${questionId}/info`);
+      console.error('❌ Erro ao buscar dados:', error);
       
-      const response = await this.fetchWithTimeout(url);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      return await response.json();
-      
-    } catch (error) {
-      console.error('❌ Erro ao buscar info da pergunta:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Fetch com timeout
-   * @private
-   */
-  async fetchWithTimeout(url, options = {}) {
-    const controller = new AbortController();
-    const timeout = options.timeout || this.defaultTimeout;
-    
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, timeout);
-    
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      return response;
-      
-    } catch (error) {
-      clearTimeout(timeoutId);
-      
-      if (error.name === 'AbortError') {
-        throw new Error(`Timeout após ${timeout/1000}s`);
-      }
+      // Em caso de erro, limpa cache para forçar nova requisição
+      const cacheKey = this.generateCacheKey(questionId, filters);
+      this.cache.delete(cacheKey);
       
       throw error;
     }
   }
   
   /**
-   * Constrói URL com parâmetros
+   * Gera chave única para cache
    * @private
    */
-  buildUrl(endpoint, params = {}) {
-    const url = new URL(this.baseUrl + endpoint, window.location.origin);
-    
-    // Adiciona parâmetros
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== null && value !== undefined) {
-        if (Array.isArray(value)) {
-          // Para arrays, adiciona múltiplas vezes o mesmo parâmetro
-          value.forEach(v => {
-            url.searchParams.append(key, v);
-          });
-        } else {
-          url.searchParams.append(key, value);
-        }
-      }
-    });
-    
-    return url.toString();
-  }
-  
-  /**
-   * Gera chave de cache
-   * @private
-   */
-  getCacheKey(questionId, filters) {
-    const filterStr = JSON.stringify(filters);
-    return `q${questionId}:${filterStr}`;
+  generateCacheKey(questionId, filters) {
+    const filterStr = JSON.stringify(filters, Object.keys(filters).sort());
+    return `q${questionId}_${filterStr}`;
   }
   
   /**
@@ -170,39 +126,42 @@ class MetabaseAPIClient {
   getFromCache(key) {
     const cached = this.cache.get(key);
     
-    if (cached) {
-      const age = Date.now() - cached.timestamp;
-      
-      if (age < this.cacheTimeout) {
-        return cached.data;
-      }
-      
-      // Cache expirado
+    if (!cached) return null;
+    
+    // Verifica se expirou
+    if (Date.now() - cached.timestamp > this.cacheTimeout) {
       this.cache.delete(key);
+      return null;
     }
     
-    return null;
+    // Verifica se os dados são válidos
+    if (!cached.data || !cached.data.data || !cached.data.data.rows) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return cached.data;
   }
   
   /**
-   * Adiciona ao cache
+   * Armazena no cache
    * @private
    */
-  addToCache(key, data) {
+  setCache(key, data) {
     // Limita tamanho do cache
-    if (this.cache.size > 20) {
+    if (this.cache.size > 10) {
       const firstKey = this.cache.keys().next().value;
       this.cache.delete(firstKey);
     }
     
     this.cache.set(key, {
-      data,
+      data: data,
       timestamp: Date.now()
     });
   }
   
   /**
-   * Limpa o cache
+   * Limpa cache
    */
   clearCache() {
     this.cache.clear();
@@ -210,42 +169,56 @@ class MetabaseAPIClient {
   }
   
   /**
-   * Obtém estatísticas do cache
+   * Obtém estatísticas
    */
-  getCacheStats() {
+  getStats() {
     return {
-      size: this.cache.size,
-      entries: Array.from(this.cache.keys())
+      ...this.stats,
+      cacheSize: this.cache.size,
+      hitRate: this.stats.requests > 0 
+        ? Math.round((this.stats.cacheHits / this.stats.requests) * 100) 
+        : 0
     };
   }
   
   /**
-   * Executa query SQL nativa (se suportado pelo backend)
-   * @param {string} sql - Query SQL
-   * @param {Object} params - Parâmetros
-   * @returns {Promise<Object>} Resultado
+   * Exporta dados para CSV (via backend)
    */
-  async executeNativeQuery(sql, params = {}) {
+  async exportCsv(questionId, filters = {}) {
     try {
-      const response = await this.fetchWithTimeout(
-        this.buildUrl('/api/native/query'),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ sql, params })
+      const url = new URL(`${this.baseUrl}/api/export/csv`);
+      url.searchParams.append('question_id', questionId);
+      
+      Object.entries(filters).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          value.forEach(v => url.searchParams.append(key, v));
+        } else if (value !== null && value !== undefined && value !== '') {
+          url.searchParams.append(key, value);
         }
-      );
+      });
+      
+      const response = await fetch(url.toString());
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       
-      return await response.json();
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `export_${questionId}_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      URL.revokeObjectURL(downloadUrl);
+      
+      console.log('✅ CSV exportado com sucesso');
       
     } catch (error) {
-      console.error('❌ Erro na query nativa:', error);
+      console.error('❌ Erro ao exportar CSV:', error);
       throw error;
     }
   }

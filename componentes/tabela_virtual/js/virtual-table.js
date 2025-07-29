@@ -1,6 +1,7 @@
 // componentes/tabela_virtual/js/virtual-table.js
 /**
  * Módulo de renderização de tabela virtual com suporte a formato colunar
+ * VERSÃO ULTRA-OTIMIZADA: Renderização apenas de linhas visíveis
  */
 
 class VirtualTable {
@@ -10,48 +11,32 @@ class VirtualTable {
     this.columns = [];   // Para formato de objetos
     this.cols = [];      // Para formato colunar (metadados)
     this.rows = [];      // Para formato colunar (dados)
-    this.isColumnarFormat = false; // Indica qual formato está em uso
+    this.isColumnarFormat = false;
     this.clusterize = null;
     this.updateCount = 0;
-  }
-
-  /**
-   * Renderiza tabela com dados no formato de objetos (compatibilidade)
-   */
-  render(data) {
-    const startTime = performance.now();
     
-    this.data = data;
-    this.columns = Object.keys(data[0] || {});
-    this.isColumnarFormat = false;
-    this.updateCount++;
-
-    Utils.log(`🎨 Renderizando ${data.length} linhas (formato objeto)...`);
-
-    // Cria estrutura HTML
-    this.createStructure();
-
-    // Usa ClusterizeJS para virtualização
-    if (data.length > 1000) {
-      this.renderWithClusterize();
-    } else {
-      this.renderSimple();
-    }
-
-    const elapsed = Utils.getElapsedTime(startTime);
-    Utils.log(`✅ Renderizado em ${elapsed}s`);
-
-    // Mostra notificação
-    if (this.updateCount > 1) {
-      Utils.showNotification('🔄 Tabela atualizada', 'success');
-    }
+    // Configurações de virtualização
+    this.visibleRows = 100; // Quantas linhas manter no DOM
+    this.bufferRows = 100;  // Buffer acima e abaixo (aumentado para evitar buracos)
+    this.rowHeight = 30;    // Altura estimada de cada linha
+    this.scrollTop = 0;
+    this.visibleStart = 0;
+    this.visibleEnd = 0;
+    this.scrollHandler = null; // Para remover listener depois
   }
 
   /**
-   * Renderiza dados no formato nativo do Metabase (colunar) - OTIMIZADO
+   * Renderiza dados no formato nativo do Metabase (colunar) - ULTRA OTIMIZADO
    */
   renderNative(response) {
     const startTime = performance.now();
+    
+    // Validação de dados
+    if (!response || !response.data || !response.data.cols || !response.data.rows) {
+      Utils.log('⚠️ Resposta inválida, mostrando tabela vazia');
+      this.renderEmpty();
+      return;
+    }
     
     // Armazena no formato colunar - NÃO CONVERTE!
     this.cols = response.data.cols;
@@ -59,16 +44,47 @@ class VirtualTable {
     this.isColumnarFormat = true;
     this.updateCount++;
 
-    Utils.log(`🎨 Renderizando ${this.rows.length} linhas (formato colunar nativo)...`);
+    const totalRows = this.rows.length;
+    
+    // Se não tem linhas, mostra vazio
+    if (totalRows === 0) {
+      this.renderEmpty();
+      return;
+    }
+    
+    Utils.log(`🎨 Renderizando ${totalRows.toLocaleString('pt-BR')} linhas (virtualização real)...`);
 
     // Cria estrutura HTML
     this.createStructureColumnar();
 
-    // Sempre usa virtualização para formato colunar
-    this.renderWithClusterizeColumnar();
+    // Usa virtualização customizada para grandes volumes
+    if (totalRows > 10000) {
+      this.renderWithCustomVirtualization();
+    } else {
+      // Para volumes menores, usa Clusterize se disponível
+      if (typeof Clusterize !== 'undefined') {
+        this.renderWithClusterizeSimple();
+      } else {
+        Utils.log('⚠️ ClusterizeJS não encontrado, usando virtualização customizada');
+        this.renderWithCustomVirtualization();
+      }
+    }
 
     const elapsed = Utils.getElapsedTime(startTime);
-    Utils.log(`✅ Renderizado em ${elapsed}s com formato colunar`);
+    Utils.log(`✅ Renderizado em ${elapsed}s`);
+    
+    if (totalRows > 10000) {
+      Utils.log(`💡 Virtualização real ativa: Apenas ~300 de ${totalRows.toLocaleString('pt-BR')} linhas estão no DOM`);
+      Utils.log(`🚀 Economia de memória: ~${Math.round((1 - (300 / totalRows)) * 100)}%`);
+      
+      // Mostra estatísticas em tabela
+      console.table({
+        'Total de Linhas': totalRows.toLocaleString('pt-BR'),
+        'Linhas no DOM': '~300',
+        'Economia de Memória': `~${Math.round((1 - (300 / totalRows)) * 100)}%`,
+        'Técnica': 'Virtualização Real'
+      });
+    }
 
     // Mostra notificação
     if (this.updateCount > 1) {
@@ -77,127 +93,135 @@ class VirtualTable {
   }
 
   /**
-   * Cria estrutura base da tabela (formato objeto)
+   * Virtualização customizada para grandes volumes
    */
-  createStructure() {
-    const totalFormatted = Utils.formatNumber(this.data.length);
-    
-    this.container.innerHTML = `
-      <div class="table-info">
-        <div class="table-info-left">
-          <div class="record-count">
-            📊 Total: <strong>${totalFormatted}</strong> registros
-          </div>
-          ${this.data.length > 1000 ? '<span class="performance-badge">⚡ Virtualização Ativa</span>' : ''}
-        </div>
-        <div class="table-info-right">
-          <span class="update-time">✅ ${Utils.formatDateTime()}</span>
-          <span class="text-muted">(Update #${this.updateCount})</span>
-        </div>
-      </div>
-      <div id="table-wrapper"></div>
-    `;
-  }
-
-  /**
-   * Cria estrutura para formato colunar
-   */
-  createStructureColumnar() {
-    const totalFormatted = Utils.formatNumber(this.rows.length);
-    
-    this.container.innerHTML = `
-      <div class="table-info">
-        <div class="table-info-left">
-          <div class="record-count">
-            📊 Total: <strong>${totalFormatted}</strong> registros
-          </div>
-          <span class="performance-badge">⚡ Formato Nativo (Otimizado)</span>
-          ${this.rows.length > 100000 ? '<span class="performance-badge" style="background: #28a745;">✅ Suporta grandes volumes</span>' : ''}
-        </div>
-        <div class="table-info-right">
-          <button class="btn btn-sm btn-secondary" onclick="app.exportData()">
-            📥 Exportar CSV
-          </button>
-          <span class="update-time">✅ ${Utils.formatDateTime()}</span>
-          <span class="text-muted">(Update #${this.updateCount})</span>
-        </div>
-      </div>
-      <div id="table-wrapper"></div>
-    `;
-  }
-
-  /**
-   * Renderização com ClusterizeJS (formato objeto)
-   */
-  renderWithClusterize() {
+  renderWithCustomVirtualization() {
     try {
       const wrapper = document.getElementById('table-wrapper');
-      
-      // Header da tabela
-      const headerHtml = this.createHeader();
-      
-      // Prepara linhas como strings HTML
-      const rows = this.data.map(row => this.createRowHtml(row));
-      
-      // HTML do container
-      wrapper.innerHTML = `
-        ${headerHtml}
-        <div id="scrollArea" class="clusterize-scroll">
-          <table>
-            <tbody id="contentArea" class="clusterize-content">
-              <tr class="clusterize-no-data">
-                <td colspan="${this.columns.length}">Carregando...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      `;
-
-      // Destrói instância anterior se existir
-      if (this.clusterize) {
-        try {
-          this.clusterize.destroy();
-        } catch (e) {
-          Utils.log('⚠️ Erro ao destruir Clusterize anterior:', e.message);
-        }
-        this.clusterize = null;
-      }
-
-      // Inicializa ClusterizeJS
-      this.clusterize = new Clusterize({
-        rows: rows,
-        scrollId: 'scrollArea',
-        contentId: 'contentArea',
-        rows_in_block: 50,
-        blocks_in_cluster: 4,
-        show_no_data_row: false
-      });
-      
-    } catch (error) {
-      Utils.log('❌ Erro na virtualização:', error);
-      // Fallback para renderização simples
-      this.renderSimple();
-    }
-  }
-
-  /**
-   * Renderização otimizada com ClusterizeJS para formato colunar
-   */
-  renderWithClusterizeColumnar() {
-    try {
-      const wrapper = document.getElementById('table-wrapper');
+      const totalRows = this.rows.length;
+      const totalHeight = totalRows * this.rowHeight;
       
       // Header da tabela
       const headerHtml = this.createHeaderColumnar();
       
-      // HTML do container
+      // HTML do container com scroll virtual
+      wrapper.innerHTML = `
+        ${headerHtml}
+        <div id="scrollArea" class="virtual-scroll-area" style="height: 600px; overflow-y: auto; position: relative;">
+          <div class="virtual-scroll-spacer" style="height: ${totalHeight}px; position: relative;">
+            <div id="contentArea" class="virtual-content" style="position: absolute; top: 0; width: 100%;">
+              <!-- Linhas serão inseridas aqui -->
+            </div>
+          </div>
+        </div>
+      `;
+
+      const scrollArea = document.getElementById('scrollArea');
+      const contentArea = document.getElementById('contentArea');
+      
+      // Função para renderizar apenas linhas visíveis
+      const renderVisibleRows = () => {
+        const scrollTop = scrollArea.scrollTop;
+        const viewportHeight = scrollArea.clientHeight;
+        
+        // Calcula quais linhas devem estar visíveis
+        const startRow = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
+        const endRow = Math.min(totalRows, Math.ceil((scrollTop + viewportHeight) / this.rowHeight) + this.bufferRows);
+        
+        // Se não mudou significativamente, não re-renderiza
+        if (Math.abs(startRow - this.visibleStart) < 20 && Math.abs(endRow - this.visibleEnd) < 20) {
+          return;
+        }
+        
+        this.visibleStart = startRow;
+        this.visibleEnd = endRow;
+        
+        // Gera HTML apenas para linhas visíveis
+        const fragments = [];
+        fragments.push('<table style="position: absolute; width: 100%;"><tbody>');
+        
+        for (let i = startRow; i < endRow; i++) {
+          const row = this.rows[i];
+          const top = i * this.rowHeight;
+          fragments.push(`<tr style="position: absolute; top: ${top}px; width: 100%; height: ${this.rowHeight}px;">`);
+          
+          for (let j = 0; j < row.length; j++) {
+            const value = row[j];
+            const col = this.cols[j];
+            const displayValue = this.formatCellValue(value, col);
+            const escaped = Utils.escapeHtml(displayValue);
+            fragments.push(`<td title="${escaped}">${escaped}</td>`);
+          }
+          
+          fragments.push('</tr>');
+        }
+        
+        fragments.push('</tbody></table>');
+        
+        // Atualiza DOM uma única vez
+        contentArea.innerHTML = fragments.join('');
+        
+        // Atualiza info de linhas visíveis
+        const visibleInfo = document.getElementById('visible-info');
+        if (visibleInfo) {
+          visibleInfo.textContent = `(Mostrando linhas ${startRow + 1}-${endRow} de ${totalRows.toLocaleString('pt-BR')})`;
+        }
+        
+        // Log discreto apenas no primeiro render
+        if (this.updateCount === 1 && this.visibleStart === 0) {
+          Utils.log(`📊 Renderizando linhas ${startRow} a ${endRow} de ${totalRows.toLocaleString('pt-BR')}`);
+        }
+      };
+      
+      // Renderiza inicial
+      renderVisibleRows();
+      
+      // Adiciona listener de scroll com throttle agressivo
+      let scrollTimeout;
+      let lastScrollTime = 0;
+      
+      this.scrollHandler = (e) => {
+        const now = Date.now();
+        
+        // Throttle: máximo uma atualização a cada 16ms (60fps)
+        if (now - lastScrollTime < 16) {
+          if (scrollTimeout) clearTimeout(scrollTimeout);
+          scrollTimeout = setTimeout(renderVisibleRows, 16);
+          return;
+        }
+        
+        lastScrollTime = now;
+        renderVisibleRows();
+      };
+      
+      scrollArea.addEventListener('scroll', this.scrollHandler);
+      
+      Utils.log(`✅ Virtualização real ativa: ${totalRows.toLocaleString('pt-BR')} linhas, mas apenas ~${this.visibleRows + this.bufferRows * 2} linhas no DOM`);
+      Utils.log(`💡 Role a tabela normalmente - as linhas são renderizadas sob demanda`);
+      
+    } catch (error) {
+      Utils.log('❌ Erro na virtualização customizada:', error);
+      // Fallback para renderização simples
+      this.renderWithClusterizeSimple();
+    }
+  }
+
+  /**
+   * Renderização com Clusterize para volumes menores
+   */
+  renderWithClusterizeSimple() {
+    try {
+      const wrapper = document.getElementById('table-wrapper');
+      const headerHtml = this.createHeaderColumnar();
+      const totalRows = this.rows.length;
+      
       wrapper.innerHTML = `
         ${headerHtml}
         <div id="scrollArea" class="clusterize-scroll">
           <table>
             <tbody id="contentArea" class="clusterize-content">
               <tr class="clusterize-no-data">
-                <td colspan="${this.cols.length}">Preparando visualização...</td>
+                <td colspan="${this.cols.length}">Carregando...</td>
               </tr>
             </tbody>
           </table>
@@ -208,163 +232,32 @@ class VirtualTable {
       if (this.clusterize) {
         try {
           this.clusterize.destroy();
-        } catch (e) {
-          Utils.log('⚠️ Erro ao destruir Clusterize:', e.message);
-        }
+        } catch (e) {}
         this.clusterize = null;
       }
 
-      // Para volumes grandes, gera HTML progressivamente
-      const totalRows = this.rows.length;
-      let htmlRows = [];
-      
-      if (totalRows > 100000) {
-        Utils.log('⚡ Volume grande detectado, usando geração progressiva de HTML...');
-        
-        // Gera apenas primeiras 5000 linhas inicialmente
-        const initialBatch = 5000;
-        for (let i = 0; i < Math.min(initialBatch, totalRows); i++) {
-          htmlRows.push(this.createRowHtmlColumnar(this.rows[i], i));
-        }
-        
-        // Inicializa Clusterize com batch inicial
-        this.clusterize = new Clusterize({
-          rows: htmlRows,
-          scrollId: 'scrollArea',
-          contentId: 'contentArea',
-          rows_in_block: 50,
-          blocks_in_cluster: 4,
-          show_no_data_row: false
-        });
-        
-        // Agenda geração do resto
-        this.scheduleRemainingRows(initialBatch, totalRows);
-        
-      } else {
-        // Volume menor: gera tudo de uma vez
-        Utils.log('📊 Gerando HTML para todas as linhas...');
-        
-        for (let i = 0; i < totalRows; i++) {
-          htmlRows.push(this.createRowHtmlColumnar(this.rows[i], i));
-        }
-        
-        this.clusterize = new Clusterize({
-          rows: htmlRows,
-          scrollId: 'scrollArea',
-          contentId: 'contentArea',
-          rows_in_block: 50,
-          blocks_in_cluster: 4,
-          show_no_data_row: false
-        });
+      // Gera HTML de todas as linhas (ok para volumes menores)
+      const rows = [];
+      for (let i = 0; i < totalRows; i++) {
+        rows.push(this.createRowHtmlColumnar(this.rows[i], i));
       }
+
+      // Inicializa Clusterize
+      this.clusterize = new Clusterize({
+        rows: rows,
+        scrollId: 'scrollArea',
+        contentId: 'contentArea',
+        rows_in_block: 50,
+        blocks_in_cluster: 4,
+        show_no_data_row: false
+      });
+      
+      Utils.log(`✅ ${totalRows.toLocaleString('pt-BR')} linhas renderizadas com Clusterize`);
       
     } catch (error) {
-      Utils.log('❌ Erro na renderização colunar:', error);
+      Utils.log('❌ Erro no Clusterize:', error);
       this.renderError(error);
     }
-  }
-
-  /**
-   * Agenda geração progressiva das linhas restantes
-   */
-  async scheduleRemainingRows(startIndex, totalRows) {
-    const BATCH_SIZE = 10000;
-    let currentIndex = startIndex;
-    
-    while (currentIndex < totalRows) {
-      const endIndex = Math.min(currentIndex + BATCH_SIZE, totalRows);
-      const batchRows = [];
-      
-      // Gera próximo batch
-      for (let i = currentIndex; i < endIndex; i++) {
-        batchRows.push(this.createRowHtmlColumnar(this.rows[i], i));
-      }
-      
-      // Adiciona ao Clusterize
-      if (this.clusterize) {
-        this.clusterize.append(batchRows);
-      }
-      
-      currentIndex = endIndex;
-      
-      // Atualiza progresso
-      const progress = Math.round((currentIndex / totalRows) * 100);
-      Utils.log(`📊 Progresso: ${progress}% (${currentIndex.toLocaleString('pt-BR')} de ${totalRows.toLocaleString('pt-BR')})`);
-      
-      // Pequena pausa para não travar
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    
-    Utils.log('✅ Todas as linhas foram preparadas para visualização');
-  }
-
-  /**
-   * Renderização simples (sem virtualização) - formato objeto
-   */
-  renderSimple() {
-    const wrapper = document.getElementById('table-wrapper');
-    
-    // Constrói HTML como string
-    let html = [this.createHeader()];
-    
-    html.push('<div class="clusterize-scroll"><table><tbody>');
-    
-    // Adiciona linhas
-    this.data.forEach(row => {
-      html.push(this.createRowHtml(row));
-    });
-    
-    html.push('</tbody></table></div>');
-    
-    wrapper.innerHTML = html.join('');
-  }
-
-  /**
-   * Cria HTML do header (formato objeto)
-   */
-  createHeader() {
-    const headers = this.columns.map(col => 
-      `<th title="${col}">${Utils.escapeHtml(col)}</th>`
-    ).join('');
-    
-    return `
-      <table>
-        <thead>
-          <tr>${headers}</tr>
-        </thead>
-      </table>
-    `;
-  }
-
-  /**
-   * Cria header para formato colunar
-   */
-  createHeaderColumnar() {
-    const headers = this.cols.map(col => {
-      const displayName = col.display_name || col.name;
-      return `<th title="${col.name}">${Utils.escapeHtml(displayName)}</th>`;
-    }).join('');
-    
-    return `
-      <table>
-        <thead>
-          <tr>${headers}</tr>
-        </thead>
-      </table>
-    `;
-  }
-
-  /**
-   * Cria HTML de uma linha (formato objeto)
-   */
-  createRowHtml(row) {
-    const cells = this.columns.map(col => {
-      const value = row[col];
-      const escaped = Utils.escapeHtml(value);
-      return `<td title="${escaped}">${escaped}</td>`;
-    }).join('');
-    
-    return `<tr>${cells}</tr>`;
   }
 
   /**
@@ -441,8 +334,293 @@ class VirtualTable {
   }
 
   /**
-   * Renderiza estado vazio
+   * Cria estrutura para formato colunar
    */
+  createStructureColumnar() {
+    const totalFormatted = Utils.formatNumber(this.rows ? this.rows.length : 0);
+    
+    this.container.innerHTML = `
+      <div class="table-info">
+        <div class="table-info-left">
+          <div class="record-count">
+            📊 Total: <strong>${totalFormatted}</strong> registros
+          </div>
+          <span class="performance-badge">⚡ Virtualização Real</span>
+          ${this.rows && this.rows.length > 10000 ? '<span class="performance-badge" style="background: #28a745;">✅ Apenas ~300 linhas no DOM</span>' : ''}
+          <span id="visible-info" class="text-muted" style="font-size: 11px; opacity: 0.7; margin-left: 10px;"></span>
+        </div>
+        <div class="table-info-right">
+          <button class="btn btn-sm btn-secondary" onclick="app.exportData()">
+            📥 Exportar CSV
+          </button>
+          <span class="update-time">✅ ${Utils.formatDateTime()}</span>
+          <span class="text-muted">(Update #${this.updateCount})</span>
+        </div>
+      </div>
+      <div id="table-wrapper"></div>
+    `;
+  }
+
+  /**
+   * Cria header para formato colunar
+   */
+  createHeaderColumnar() {
+    const headers = this.cols.map(col => {
+      const displayName = col.display_name || col.name;
+      return `<th title="${col.name}">${Utils.escapeHtml(displayName)}</th>`;
+    }).join('');
+    
+    return `
+      <table>
+        <thead>
+          <tr>${headers}</tr>
+        </thead>
+      </table>
+    `;
+  }
+
+  /**
+   * Exporta CSV do formato colunar (mantém otimizado)
+   */
+  exportToCsvColumnar() {
+    if (!this.rows || this.rows.length === 0) {
+      Utils.showNotification('Nenhum dado para exportar', 'warning');
+      return;
+    }
+
+    try {
+      const totalRows = this.rows.length;
+      Utils.showNotification(`Preparando exportação de ${totalRows.toLocaleString('pt-BR')} registros...`, 'info');
+
+      // Header
+      const headers = this.cols.map(col => {
+        const name = col.name;
+        if (name.includes(',')) {
+          return `"${name}"`;
+        }
+        return name;
+      });
+      
+      let csv = headers.join(',') + '\n';
+      
+      // Processa em chunks
+      const CHUNK_SIZE = 50000;
+      
+      for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
+        const endIndex = Math.min(i + CHUNK_SIZE, totalRows);
+        
+        for (let j = i; j < endIndex; j++) {
+          const row = this.rows[j];
+          const values = row.map((value, colIndex) => {
+            if (value === null || value === undefined) return '';
+            
+            const col = this.cols[colIndex];
+            let formattedValue = this.formatCellValue(value, col);
+            
+            if (formattedValue.includes(',') || formattedValue.includes('\n') || formattedValue.includes('"')) {
+              return `"${formattedValue.replace(/"/g, '""')}"`;
+            }
+            return formattedValue;
+          });
+          
+          csv += values.join(',') + '\n';
+        }
+        
+        if (totalRows > 100000) {
+          const progress = Math.round((endIndex / totalRows) * 100);
+          Utils.showNotification(`Exportando... ${progress}%`, 'info');
+        }
+      }
+
+      // Download
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // IMPORTANTE: Libera memória
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        csv = null; // Libera string grande
+      }, 100);
+      
+      Utils.showNotification(`✅ ${totalRows.toLocaleString('pt-BR')} registros exportados com sucesso!`, 'success');
+      
+    } catch (error) {
+      Utils.log('❌ Erro ao exportar:', error);
+      Utils.showNotification('Erro ao exportar: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Destrói a tabela e limpa recursos
+   */
+  destroy() {
+    // Remove scroll handler se existir
+    if (this.scrollHandler) {
+      const scrollArea = document.getElementById('scrollArea');
+      if (scrollArea) {
+        scrollArea.removeEventListener('scroll', this.scrollHandler);
+      }
+      this.scrollHandler = null;
+    }
+    
+    if (this.clusterize) {
+      try {
+        this.clusterize.destroy();
+      } catch (e) {}
+      this.clusterize = null;
+    }
+    
+    // Limpa dados - IMPORTANTE: não manter referências
+    this.data = null;
+    this.columns = null;
+    this.cols = null;
+    this.rows = null;
+    this.isColumnarFormat = false;
+    this.container.innerHTML = '';
+  }
+
+  /**
+   * Obtém estatísticas da tabela
+   */
+  getStats() {
+    return {
+      totalRows: this.isColumnarFormat ? (this.rows ? this.rows.length : 0) : (this.data ? this.data.length : 0),
+      totalColumns: this.isColumnarFormat ? (this.cols ? this.cols.length : 0) : (this.columns ? this.columns.length : 0),
+      updateCount: this.updateCount,
+      isVirtualized: true,
+      format: this.isColumnarFormat ? 'columnar' : 'objeto',
+      virtualization: {
+        visibleRows: this.visibleRows,
+        bufferRows: this.bufferRows,
+        currentVisible: `${this.visibleStart}-${this.visibleEnd}`
+      }
+    };
+  }
+
+  // Métodos de compatibilidade (simplificados)...
+  render(data) {
+    const startTime = performance.now();
+    
+    this.data = data;
+    this.columns = Object.keys(data[0] || {});
+    this.isColumnarFormat = false;
+    this.updateCount++;
+
+    Utils.log(`🎨 Renderizando ${data.length} linhas (formato objeto)...`);
+
+    this.createStructure();
+
+    if (data.length > 1000) {
+      this.renderWithClusterize();
+    } else {
+      this.renderSimple();
+    }
+
+    const elapsed = Utils.getElapsedTime(startTime);
+    Utils.log(`✅ Renderizado em ${elapsed}s`);
+  }
+
+  createStructure() {
+    const totalFormatted = Utils.formatNumber(this.data.length);
+    
+    this.container.innerHTML = `
+      <div class="table-info">
+        <div class="table-info-left">
+          <div class="record-count">
+            📊 Total: <strong>${totalFormatted}</strong> registros
+          </div>
+          ${this.data.length > 1000 ? '<span class="performance-badge">⚡ Virtualização Ativa</span>' : ''}
+        </div>
+        <div class="table-info-right">
+          <span class="update-time">✅ ${Utils.formatDateTime()}</span>
+          <span class="text-muted">(Update #${this.updateCount})</span>
+        </div>
+      </div>
+      <div id="table-wrapper"></div>
+    `;
+  }
+
+  renderWithClusterize() {
+    try {
+      const wrapper = document.getElementById('table-wrapper');
+      const headerHtml = this.createHeader();
+      const rows = this.data.map(row => this.createRowHtml(row));
+      
+      wrapper.innerHTML = `
+        ${headerHtml}
+        <div id="scrollArea" class="clusterize-scroll">
+          <table>
+            <tbody id="contentArea" class="clusterize-content">
+              <tr class="clusterize-no-data">
+                <td colspan="${this.columns.length}">Carregando...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      if (this.clusterize) {
+        try {
+          this.clusterize.destroy();
+        } catch (e) {}
+        this.clusterize = null;
+      }
+
+      this.clusterize = new Clusterize({
+        rows: rows,
+        scrollId: 'scrollArea',
+        contentId: 'contentArea',
+        rows_in_block: 50,
+        blocks_in_cluster: 4,
+        show_no_data_row: false
+      });
+      
+    } catch (error) {
+      Utils.log('❌ Erro na virtualização:', error);
+      this.renderSimple();
+    }
+  }
+
+  renderSimple() {
+    const wrapper = document.getElementById('table-wrapper');
+    let html = [this.createHeader()];
+    
+    html.push('<div class="clusterize-scroll"><table><tbody>');
+    this.data.forEach(row => {
+      html.push(this.createRowHtml(row));
+    });
+    html.push('</tbody></table></div>');
+    
+    wrapper.innerHTML = html.join('');
+  }
+
+  createHeader() {
+    const headers = this.columns.map(col => 
+      `<th title="${col}">${Utils.escapeHtml(col)}</th>`
+    ).join('');
+    
+    return `<table><thead><tr>${headers}</tr></thead></table>`;
+  }
+
+  createRowHtml(row) {
+    const cells = this.columns.map(col => {
+      const value = row[col];
+      const escaped = Utils.escapeHtml(value);
+      return `<td title="${escaped}">${escaped}</td>`;
+    }).join('');
+    
+    return `<tr>${cells}</tr>`;
+  }
+
   renderEmpty() {
     this.container.innerHTML = `
       <div class="empty-state">
@@ -452,9 +630,6 @@ class VirtualTable {
     `;
   }
 
-  /**
-   * Renderiza estado de erro
-   */
   renderError(error) {
     this.container.innerHTML = `
       <div class="error-message">
@@ -464,26 +639,15 @@ class VirtualTable {
     `;
   }
 
-  /**
-   * Renderiza loading
-   */
   renderLoading(message = 'Carregando dados...') {
     this.container.innerHTML = `
       <div class="loading-container">
         <div class="spinner"></div>
         <p class="loading-message">${message}</p>
-        <div class="loading-progress" style="display: none;">
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: 0%"></div>
-          </div>
-        </div>
       </div>
     `;
   }
 
-  /**
-   * Exporta dados para CSV (formato objeto)
-   */
   exportToCsv() {
     if (!this.data || this.data.length === 0) {
       Utils.showNotification('Nenhum dado para exportar', 'warning');
@@ -491,23 +655,15 @@ class VirtualTable {
     }
 
     try {
-      // Para grandes volumes, mostra progresso
-      if (this.data.length > 10000) {
-        Utils.showNotification('Preparando exportação de ' + this.data.length + ' registros...', 'info');
-      }
-
-      // Header
       let csv = this.columns.join(',') + '\n';
-      
-      // Dados (processa em chunks para não travar)
       const CHUNK_SIZE = 1000;
+      
       for (let i = 0; i < this.data.length; i += CHUNK_SIZE) {
         const chunk = this.data.slice(i, Math.min(i + CHUNK_SIZE, this.data.length));
         
         chunk.forEach(row => {
           const values = this.columns.map(col => {
             const value = row[col] || '';
-            // Escapa valores com vírgulas ou quebras de linha
             if (value.toString().includes(',') || value.toString().includes('\n')) {
               return `"${value.toString().replace(/"/g, '""')}"`;
             }
@@ -518,7 +674,6 @@ class VirtualTable {
         });
       }
 
-      // Download
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -539,123 +694,6 @@ class VirtualTable {
     }
   }
 
-  /**
-   * Exporta CSV do formato colunar (OTIMIZADO)
-   */
-  exportToCsvColumnar() {
-    if (!this.rows || this.rows.length === 0) {
-      Utils.showNotification('Nenhum dado para exportar', 'warning');
-      return;
-    }
-
-    try {
-      const totalRows = this.rows.length;
-      Utils.showNotification(`Preparando exportação de ${totalRows.toLocaleString('pt-BR')} registros...`, 'info');
-
-      // Header
-      const headers = this.cols.map(col => {
-        const name = col.name;
-        // Escapa se tiver vírgula
-        if (name.includes(',')) {
-          return `"${name}"`;
-        }
-        return name;
-      });
-      
-      let csv = headers.join(',') + '\n';
-      
-      // Processa em chunks grandes para melhor performance
-      const CHUNK_SIZE = 50000;
-      
-      for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
-        const endIndex = Math.min(i + CHUNK_SIZE, totalRows);
-        
-        for (let j = i; j < endIndex; j++) {
-          const row = this.rows[j];
-          const values = row.map((value, colIndex) => {
-            if (value === null || value === undefined) return '';
-            
-            // Formata valor se necessário
-            const col = this.cols[colIndex];
-            let formattedValue = this.formatCellValue(value, col);
-            
-            // Escapa se necessário
-            if (formattedValue.includes(',') || formattedValue.includes('\n') || formattedValue.includes('"')) {
-              return `"${formattedValue.replace(/"/g, '""')}"`;
-            }
-            return formattedValue;
-          });
-          
-          csv += values.join(',') + '\n';
-        }
-        
-        // Atualiza progresso
-        if (totalRows > 100000) {
-          const progress = Math.round((endIndex / totalRows) * 100);
-          Utils.showNotification(`Exportando... ${progress}%`, 'info');
-        }
-      }
-
-      // Download
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      
-      link.setAttribute('href', url);
-      link.setAttribute('download', `export_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      Utils.showNotification(`✅ ${totalRows.toLocaleString('pt-BR')} registros exportados com sucesso!`, 'success');
-      
-    } catch (error) {
-      Utils.log('❌ Erro ao exportar:', error);
-      Utils.showNotification('Erro ao exportar: ' + error.message, 'error');
-    }
-  }
-
-  /**
-   * Destrói a tabela e limpa recursos
-   */
-  destroy() {
-    if (this.clusterize) {
-      try {
-        this.clusterize.destroy();
-      } catch (e) {
-        // Ignora erros ao destruir
-      }
-      this.clusterize = null;
-    }
-    
-    // Limpa dados
-    this.data = [];
-    this.columns = [];
-    this.cols = [];
-    this.rows = [];
-    this.isColumnarFormat = false;
-    this.container.innerHTML = '';
-  }
-
-  /**
-   * Obtém estatísticas da tabela
-   */
-  getStats() {
-    return {
-      totalRows: this.isColumnarFormat ? this.rows.length : this.data.length,
-      totalColumns: this.isColumnarFormat ? this.cols.length : this.columns.length,
-      updateCount: this.updateCount,
-      isVirtualized: this.clusterize !== null,
-      format: this.isColumnarFormat ? 'columnar' : 'objeto'
-    };
-  }
-  
-  /**
-   * Obtém dados atuais (para compatibilidade)
-   */
   getData() {
     return this.data;
   }

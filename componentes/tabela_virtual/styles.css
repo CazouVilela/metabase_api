@@ -398,3 +398,82 @@ tbody tr:nth-child(even) {
 .mb-2 { margin-bottom: var(--spacing-sm); }
 .mb-3 { margin-bottom: var(--spacing-md); }
 .mb-4 { margin-bottom: var(--spacing-lg); }
+
+
+
+/* Adicionar ao arquivo tabela.css ou criar virtual-table.css */
+
+/* Estilos para virtualização customizada */
+.virtual-scroll-area {
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 600px;
+  border: 1px solid #ddd;
+}
+
+.virtual-scroll-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.virtual-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+.virtual-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.virtual-content tr {
+  display: table-row;
+  border-bottom: 1px solid #eee;
+}
+
+.virtual-content td {
+  padding: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+/* Ajuste para headers fixos */
+#table-wrapper > table {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+  border-bottom: 2px solid #ddd;
+}
+
+/* Performance badges */
+.performance-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: #007bff;
+  color: white;
+  border-radius: 4px;
+  margin-left: 10px;
+}
+
+/* Ajustes para grande volume */
+.table-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.table-info-left, .table-info-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
