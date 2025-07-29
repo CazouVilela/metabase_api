@@ -126,6 +126,7 @@ class DataTransformer {
      */
     aggregateByMonth(rows, columnMap) {
         const aggregated = {};
+        const startTime = Date.now();
         
         // Verificar se as colunas necessárias existem
         const requiredColumns = ['date', 'account', 'impressions', 'clicks', 'spend'];
@@ -138,61 +139,76 @@ class DataTransformer {
             return {};
         }
         
-        rows.forEach((row, rowIndex) => {
+        // Pré-calcular índices para evitar lookups repetidos
+        const dateIdx = columnMap.date;
+        const accountIdx = columnMap.account;
+        const impressionsIdx = columnMap.impressions;
+        const clicksIdx = columnMap.clicks;
+        const spendIdx = columnMap.spend;
+        
+        // Processar em lotes para melhor performance
+        const batchSize = 1000;
+        let processedRows = 0;
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            
             try {
-                const dateValue = row[columnMap.date];
-                if (!dateValue) {
-                    console.warn(`[DataTransformer] Data vazia na linha ${rowIndex}`);
-                    return;
-                }
+                const dateValue = row[dateIdx];
+                if (!dateValue) continue;
                 
-                const date = new Date(dateValue);
-                if (isNaN(date.getTime())) {
-                    console.warn(`[DataTransformer] Data inválida na linha ${rowIndex}:`, dateValue);
-                    return;
-                }
+                // Parse de data otimizado
+                const dateStr = dateValue.substring(0, 7); // YYYY-MM
+                const accountName = row[accountIdx] || 'Sem Conta';
                 
-                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                const accountName = row[columnMap.account] || 'Sem Conta';
-                
-                if (!aggregated[monthKey]) {
-                    aggregated[monthKey] = {
-                        date: date,
+                // Inicializar estrutura se necessário
+                if (!aggregated[dateStr]) {
+                    aggregated[dateStr] = {
+                        date: new Date(dateValue),
                         accounts: {},
-                        totals: {
-                            impressions: 0,
-                            clicks: 0,
-                            spend: 0
-                        }
+                        totals: { impressions: 0, clicks: 0, spend: 0 }
                     };
                 }
                 
-                if (!aggregated[monthKey].accounts[accountName]) {
-                    aggregated[monthKey].accounts[accountName] = {
+                if (!aggregated[dateStr].accounts[accountName]) {
+                    aggregated[dateStr].accounts[accountName] = {
                         impressions: 0,
                         clicks: 0,
                         spend: 0
                     };
                 }
                 
-                // Somar valores
-                const impressions = parseFloat(row[columnMap.impressions]) || 0;
-                const clicks = parseFloat(row[columnMap.clicks]) || 0;
-                const spend = parseFloat(row[columnMap.spend]) || 0;
+                // Somar valores - parse único
+                const impressions = Number(row[impressionsIdx]) || 0;
+                const clicks = Number(row[clicksIdx]) || 0;
+                const spend = Number(row[spendIdx]) || 0;
                 
-                aggregated[monthKey].accounts[accountName].impressions += impressions;
-                aggregated[monthKey].accounts[accountName].clicks += clicks;
-                aggregated[monthKey].accounts[accountName].spend += spend;
+                aggregated[dateStr].accounts[accountName].impressions += impressions;
+                aggregated[dateStr].accounts[accountName].clicks += clicks;
+                aggregated[dateStr].accounts[accountName].spend += spend;
                 
-                aggregated[monthKey].totals.impressions += impressions;
-                aggregated[monthKey].totals.clicks += clicks;
-                aggregated[monthKey].totals.spend += spend;
+                aggregated[dateStr].totals.impressions += impressions;
+                aggregated[dateStr].totals.clicks += clicks;
+                aggregated[dateStr].totals.spend += spend;
+                
             } catch (error) {
-                console.error(`[DataTransformer] Erro ao processar linha ${rowIndex}:`, error);
+                // Log apenas a cada 1000 erros para não poluir console
+                if (i % 1000 === 0) {
+                    console.error(`[DataTransformer] Erro ao processar linha ${i}:`, error);
+                }
             }
-        });
+            
+            // Log de progresso a cada lote
+            processedRows++;
+            if (processedRows % batchSize === 0) {
+                const progress = Math.round((processedRows / rows.length) * 100);
+                console.log(`[DataTransformer] Processando... ${progress}%`);
+            }
+        }
         
-        console.log('[DataTransformer] Agregação concluída:', {
+        const aggregationTime = Date.now() - startTime;
+        console.log(`[DataTransformer] Agregação concluída em ${aggregationTime}ms:`, {
+            totalLinhas: rows.length,
             totalMeses: Object.keys(aggregated).length,
             meses: Object.keys(aggregated).sort()
         });

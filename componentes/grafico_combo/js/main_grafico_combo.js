@@ -12,7 +12,7 @@ class ChartApp {
         // Serviços
         this.filterManager = new FilterManager();
         
-        // Tentar carregar APIClient (opcional se usarmos fetch direto)
+        // Tentar carregar APIClient
         try {
             if (typeof APIClient !== 'undefined') {
                 this.apiClient = new APIClient();
@@ -37,7 +37,59 @@ class ChartApp {
         // Obter question_id da URL
         try {
             this.questionId = this.getQuestionIdFromURL();
-            /**
+        } catch (error) {
+            console.error('[ChartApp] Erro ao obter question_id:', error);
+            this.questionId = null;
+        }
+        
+        // Elementos DOM
+        this.elements = {
+            loading: document.getElementById('loading'),
+            totalContas: document.getElementById('total-contas'),
+            periodoDados: document.getElementById('periodo-dados'),
+            ultimaAtualizacao: document.getElementById('ultima-atualizacao'),
+            updateStatus: document.getElementById('update-status'),
+            btnExport: document.getElementById('btn-export-data'),
+            btnFullscreen: document.getElementById('btn-fullscreen')
+        };
+        
+        // Bind de métodos
+        this.loadData = this.loadData.bind(this);
+        this.handleFilterChange = this.handleFilterChange.bind(this);
+        
+        // Comandos de debug globais
+        window.chartApp = {
+            getData: () => this.currentData,
+            getFilters: () => this.filterManager.currentFilters,
+            getStats: () => this.getStats(),
+            getQuestionId: () => this.questionId,
+            refresh: () => this.loadData('manual'),
+            stopMonitoring: () => {
+                this.filterManager.stopMonitoring();
+                console.log('[ChartApp] Monitoramento de filtros parado');
+            },
+            startMonitoring: () => {
+                this.filterManager.startMonitoring(this.handleFilterChange, 2000);
+                console.log('[ChartApp] Monitoramento de filtros iniciado');
+            },
+            exportData: () => this.exportData(),
+            debugData: () => this.debugData(),
+            fixHeight: () => {
+                // Comando para forçar altura fixa se necessário
+                const container = document.getElementById('chart-container');
+                if (container) {
+                    container.style.height = '450px';
+                    container.style.overflow = 'hidden';
+                }
+                if (this.chart) {
+                    this.chart.setSize(null, 450, false);
+                }
+                console.log('[ChartApp] Altura fixada em 450px');
+            }
+        };
+    }
+
+    /**
      * Debug detalhado dos dados
      */
     debugData() {
@@ -102,38 +154,6 @@ class ChartApp {
                 meses: transformed.categories?.length || 0,
                 contas: transformed.stats?.totalAccounts || 0
             } : null
-        };
-    }
-} catch (error) {
-            console.error('[ChartApp] Erro ao obter question_id:', error);
-            this.questionId = null;
-        }
-        
-        // Elementos DOM
-        this.elements = {
-            loading: document.getElementById('loading'),
-            totalContas: document.getElementById('total-contas'),
-            periodoDados: document.getElementById('periodo-dados'),
-            ultimaAtualizacao: document.getElementById('ultima-atualizacao'),
-            updateStatus: document.getElementById('update-status'),
-            btnExport: document.getElementById('btn-export-data'),
-            btnFullscreen: document.getElementById('btn-fullscreen')
-        };
-        
-        // Bind de métodos
-        this.loadData = this.loadData.bind(this);
-        this.handleFilterChange = this.handleFilterChange.bind(this);
-        
-        // Comandos de debug globais
-        window.chartApp = {
-            getData: () => this.currentData,
-            getFilters: () => this.filterManager.currentFilters,
-            getStats: () => this.getStats(),
-            getQuestionId: () => this.questionId,
-            refresh: () => this.loadData('manual'),
-            stopMonitoring: () => this.filterManager.stopMonitoring(),
-            exportData: () => this.exportData(),
-            debugData: () => this.debugData()
         };
     }
 
@@ -234,6 +254,9 @@ class ChartApp {
         console.log(`[ChartApp] Carregando dados... (fonte: ${source})`);
         this.isLoading = true;
         this.showLoading(true);
+        
+        // Marca tempo inicial para debug de performance
+        const totalStartTime = Date.now();
 
         try {
             // Preparar parâmetros
@@ -285,8 +308,11 @@ class ChartApp {
                 throw new Error('Resposta inválida da API');
             }
 
-            // Transformar dados
+            // Transformar dados com medição de tempo
+            const transformStartTime = Date.now();
             const chartData = this.dataTransformer.transformData(response);
+            const transformTime = Date.now() - transformStartTime;
+            console.log(`[ChartApp] Dados transformados em ${transformTime}ms`);
             
             // Armazenar dados
             this.currentData = {
@@ -299,11 +325,20 @@ class ChartApp {
             // Atualizar interface
             this.updateUI(chartData);
             
-            // Construir gráfico
+            // Construir gráfico com medição de tempo
+            const chartStartTime = Date.now();
             this.chartBuilder.buildChart(chartData);
+            const chartTime = Date.now() - chartStartTime;
+            console.log(`[ChartApp] Gráfico construído em ${chartTime}ms`);
+            
+            // Tempo total
+            const totalTime = Date.now() - totalStartTime;
+            console.log(`[ChartApp] Tempo total: ${totalTime}ms (API: ${loadTime}ms, Transform: ${transformTime}ms, Chart: ${chartTime}ms)`);
             
             // Habilitar exportação
-            this.elements.btnExport.disabled = chartData.series.length === 0;
+            if (this.elements.btnExport) {
+                this.elements.btnExport.disabled = chartData.series.length === 0;
+            }
 
         } catch (error) {
             console.error('[ChartApp] Erro ao carregar dados:', error);
@@ -322,23 +357,31 @@ class ChartApp {
         const { stats } = chartData;
         
         // Total de contas
-        this.elements.totalContas.textContent = 
-            `${stats.totalAccounts} ${stats.totalAccounts === 1 ? 'conta' : 'contas'}`;
+        if (this.elements.totalContas) {
+            this.elements.totalContas.textContent = 
+                `${stats.totalAccounts} ${stats.totalAccounts === 1 ? 'conta' : 'contas'}`;
+        }
         
         // Período dos dados
-        this.elements.periodoDados.textContent = 
-            this.dataTransformer.formatDateRange(stats.dateRange.start, stats.dateRange.end);
+        if (this.elements.periodoDados) {
+            this.elements.periodoDados.textContent = 
+                this.dataTransformer.formatDateRange(stats.dateRange.start, stats.dateRange.end);
+        }
         
         // Última atualização
-        const now = new Date();
-        this.elements.ultimaAtualizacao.textContent = 
-            `Atualizado às ${now.toLocaleTimeString('pt-BR')}`;
+        if (this.elements.ultimaAtualizacao) {
+            const now = new Date();
+            this.elements.ultimaAtualizacao.textContent = 
+                `Atualizado às ${now.toLocaleTimeString('pt-BR')}`;
+        }
         
         // Status de atualização
-        this.elements.updateStatus.textContent = 
-            `${this.formatNumber(stats.totalImpressions)} impressões | ` +
-            `${this.formatNumber(stats.totalClicks)} clicks | ` +
-            `R$ ${this.formatNumber(stats.totalSpend, 2)}`;
+        if (this.elements.updateStatus) {
+            this.elements.updateStatus.textContent = 
+                `${this.formatNumber(stats.totalImpressions)} impressões | ` +
+                `${this.formatNumber(stats.totalClicks)} clicks | ` +
+                `R$ ${this.formatNumber(stats.totalSpend, 2)}`;
+        }
     }
 
     /**
@@ -350,21 +393,32 @@ class ChartApp {
             mudancas: changedFilters
         });
 
+        // Debounce para evitar múltiplas atualizações rápidas
+        if (this.filterChangeTimeout) {
+            clearTimeout(this.filterChangeTimeout);
+        }
+
         // Indicar que está atualizando
-        this.elements.updateStatus.textContent = 'Atualizando com novos filtros...';
+        if (this.elements.updateStatus) {
+            this.elements.updateStatus.textContent = 'Atualizando com novos filtros...';
+        }
         
-        // Recarregar dados
-        this.loadData('filter_change');
+        // Aguardar 500ms antes de recarregar (debounce)
+        this.filterChangeTimeout = setTimeout(() => {
+            this.loadData('filter_change');
+        }, 500);
     }
 
     /**
      * Mostra/esconde indicador de carregamento
      */
     showLoading(show) {
-        if (show) {
-            this.elements.loading.classList.add('active');
-        } else {
-            this.elements.loading.classList.remove('active');
+        if (this.elements.loading) {
+            if (show) {
+                this.elements.loading.classList.add('active');
+            } else {
+                this.elements.loading.classList.remove('active');
+            }
         }
     }
 
@@ -372,12 +426,14 @@ class ChartApp {
      * Mostra mensagem de erro
      */
     showError(message) {
-        this.elements.updateStatus.textContent = message;
-        this.elements.updateStatus.style.color = '#f44336';
-        
-        setTimeout(() => {
-            this.elements.updateStatus.style.color = '';
-        }, 5000);
+        if (this.elements.updateStatus) {
+            this.elements.updateStatus.textContent = message;
+            this.elements.updateStatus.style.color = '#f44336';
+            
+            setTimeout(() => {
+                this.elements.updateStatus.style.color = '';
+            }, 5000);
+        }
     }
 
     /**

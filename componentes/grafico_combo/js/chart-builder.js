@@ -22,11 +22,38 @@ class ChartBuilder {
         
         const options = this.prepareChartOptions(chartData);
         
+        // Destruir gráfico anterior se existir
         if (this.chart) {
             this.chart.destroy();
+            this.chart = null;
         }
         
+        // Garantir que o container tem dimensões definidas
+        const container = document.getElementById(this.containerId);
+        if (container) {
+            // Forçar altura fixa para evitar crescimento
+            container.style.height = '450px';
+            container.style.position = 'relative';
+        }
+        
+        // Criar novo gráfico com opções de altura fixa
+        options.chart.height = 450; // Altura fixa
+        options.chart.animation = false; // Desabilitar animação inicial para performance
+        
         this.chart = Highcharts.chart(this.containerId, options);
+        
+        // Re-habilitar animação após renderização inicial
+        setTimeout(() => {
+            if (this.chart) {
+                this.chart.update({
+                    chart: {
+                        animation: {
+                            duration: 750
+                        }
+                    }
+                }, false);
+            }
+        }, 100);
     }
 
     /**
@@ -114,7 +141,9 @@ class ChartBuilder {
                 },
                 animation: {
                     duration: 750
-                }
+                },
+                reflow: false, // Evita redimensionamentos automáticos
+                height: 450    // Altura padrão
             },
             title: {
                 text: null
@@ -289,7 +318,12 @@ class ChartBuilder {
      */
     resize() {
         if (this.chart) {
-            this.chart.reflow();
+            // Usar setSize para forçar tamanho específico
+            const container = document.getElementById(this.containerId);
+            if (container) {
+                const width = container.offsetWidth;
+                this.chart.setSize(width, 450, false);
+            }
         }
     }
 
@@ -301,7 +335,16 @@ class ChartBuilder {
         container.classList.toggle('fullscreen');
         
         setTimeout(() => {
-            this.resize();
+            if (this.chart) {
+                if (container.classList.contains('fullscreen')) {
+                    // Em tela cheia, usar altura maior
+                    const height = window.innerHeight - 120;
+                    this.chart.setSize(null, height, true);
+                } else {
+                    // Fora de tela cheia, voltar para altura padrão
+                    this.chart.setSize(null, 450, true);
+                }
+            }
         }, 100);
     }
 
@@ -377,5 +420,20 @@ class ChartBuilder {
                 }
             }
         });
+    }
+
+    /**
+     * Força altura fixa (útil para corrigir problemas de redimensionamento)
+     */
+    forceHeight(height = 450) {
+        const container = document.getElementById(this.containerId);
+        if (container) {
+            container.style.height = `${height}px`;
+            container.style.overflow = 'hidden';
+        }
+        
+        if (this.chart) {
+            this.chart.setSize(null, height, false);
+        }
     }
 }
