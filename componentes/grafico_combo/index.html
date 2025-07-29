@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gráfico Combinado - Metabase Dashboard</title>
+    
+    <!-- CSS Base compartilhado -->
+    <link rel="stylesheet" href="../recursos_compartilhados/css/base.css">
+    
+    <!-- CSS específico do gráfico -->
+    <link rel="stylesheet" href="css/grafico.css">
+    
+    <!-- Highcharts -->
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header com informações -->
+        <div class="header-info">
+            <h2>Performance de Campanhas</h2>
+            <div class="info-stats">
+                <span id="total-contas">0 contas</span>
+                <span id="periodo-dados">-</span>
+                <span id="ultima-atualizacao">-</span>
+            </div>
+            <div class="loading-indicator" id="loading">
+                <span class="spinner"></span>
+                <span>Carregando dados...</span>
+            </div>
+        </div>
+
+        <!-- Container do gráfico -->
+        <div id="chart-container" class="chart-container">
+            <div class="empty-state" id="empty-state">
+                <p>Nenhum dado disponível para exibição</p>
+                <small>Aplique filtros no dashboard para visualizar os dados</small>
+            </div>
+        </div>
+
+        <!-- Rodapé com controles -->
+        <div class="chart-footer">
+            <div class="chart-controls">
+                <button id="btn-export-data" class="btn-secondary" disabled>
+                    Exportar Dados
+                </button>
+                <button id="btn-fullscreen" class="btn-secondary">
+                    Tela Cheia
+                </button>
+            </div>
+            <div class="update-info">
+                <span id="update-status"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts compartilhados -->
+    <script src="../recursos_compartilhados/js/filter-manager.js"></script>
+    <script src="../recursos_compartilhados/js/api-client.js"></script>
+    <script src="../recursos_compartilhados/js/data-processor.js"></script>
+    <!-- export-utils.js é opcional -->
+    
+    <!-- Scripts específicos do gráfico -->
+    <script src="js/config.js"></script>
+    <script src="js/data-transformer.js"></script>
+    <script src="js/chart-builder.js"></script>
+    <script src="js/main_grafico_combo.js"></script>
+</body>
+</html>
