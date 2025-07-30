@@ -1,4 +1,4 @@
-# Componente Gráfico Combinado v1.0
+# Componente Gráfico Combinado v1.1
 
 Componente de visualização de dados em gráfico combinado (colunas empilhadas + linhas) para dashboards do Metabase.
 
@@ -7,6 +7,8 @@ Componente de visualização de dados em gráfico combinado (colunas empilhadas 
 - **Gráfico Multi-Eixos**: 3 eixos Y independentes para diferentes métricas
 - **Agregação Automática**: Dados agrupados por mês/ano com performance otimizada
 - **Filtros Sincronizados**: Captura automática dos filtros do dashboard
+- **Contador de Linhas**: Exibe total de linhas processadas antes da agregação (v1.1)
+- **Debug Aprimorado**: Comandos avançados para diagnóstico de filtros (v1.1)
 - **Responsivo**: Adapta-se a diferentes tamanhos de tela
 - **Exportação**: CSV, PNG, JPG, SVG
 - **Tela Cheia**: Modo de visualização expandida
@@ -19,6 +21,7 @@ Componente de visualização de dados em gráfico combinado (colunas empilhadas 
 - **Eixo Y Principal (esquerda)**: Impressões - Colunas empilhadas por conta
 - **Eixo Y Secundário 1 (direita)**: Clicks totais - Linha vermelha
 - **Eixo Y Secundário 2 (direita)**: Investimento total - Linha verde pontilhada
+- **Cabeçalho**: Total de linhas | Contas | Período | Última atualização (v1.1)
 
 ## Como Usar no Metabase
 
@@ -51,6 +54,12 @@ Adicione um iframe com o seguinte formato:
 - Objetivo (objective)
 - Meta de otimização (optimization_goal)
 - Tipo de compra (buying_type)
+
+### 4. Verificação Visual de Filtros (v1.1)
+O contador de linhas no cabeçalho permite verificar se os filtros estão funcionando:
+- **Sem filtros**: Ex: "41.285 linhas"
+- **Com filtro de data**: Número deve diminuir (Ex: "3.000 linhas")
+- **Com múltiplos filtros**: Número reduz ainda mais (Ex: "500 linhas")
 
 ## Como Obter o Question ID
 
@@ -94,11 +103,11 @@ O componente mede e exibe o tempo de cada etapa:
 - **Chart Time**: Tempo para renderizar gráfico
 
 ### Volumes Suportados
-| Volume de Dados | Tempo Total | Memória |
-|----------------|-------------|---------|
-| 10k linhas | < 0.5s | ~50MB |
-| 100k linhas | < 1s | ~75MB |
-| 600k linhas | < 1.5s | ~100MB |
+| Volume de Dados | Tempo Total | Memória | Linhas Exibidas |
+|----------------|-------------|---------|-----------------|
+| 10k linhas | < 0.5s | ~50MB | 10.000 linhas |
+| 100k linhas | < 1s | ~75MB | 100.000 linhas |
+| 600k linhas | < 1.5s | ~100MB | 600.000 linhas |
 
 ## Exemplos de Uso
 
@@ -129,11 +138,11 @@ O componente mede e exibe o tempo de cada etapa:
 </iframe>
 ```
 
-## Comandos de Debug (Console)
+## Comandos de Debug (Console) - v1.1
 
 ### Comandos Básicos
 ```javascript
-// Estatísticas gerais
+// Estatísticas gerais (inclui totalLinhas)
 chartApp.getStats()
 
 // Ver question_id configurado
@@ -150,6 +159,18 @@ chartApp.getFilters()
 
 // Recarregar manualmente
 chartApp.refresh()
+```
+
+### Comandos de Filtros (v1.1)
+```javascript
+// Debug completo de filtros
+chartApp.debugFilters()
+
+// Forçar recaptura e recarga de filtros
+chartApp.forceReloadWithFilters()
+
+// Ver URL e parâmetros
+console.log('URL:', window.location.href)
 ```
 
 ### Comandos de Controle
@@ -173,6 +194,20 @@ chartApp.exportData()
 chartApp.refresh()
 // Observe no console:
 // [ChartApp] Tempo total: 1234ms (API: 650ms, Transform: 487ms, Chart: 97ms)
+```
+
+### Diagnóstico de Filtros (v1.1)
+```javascript
+// Verificar se filtros estão sendo aplicados
+console.clear()
+const antes = chartApp.getStats().totalLinhas
+console.log('Linhas antes:', antes)
+
+// Aplique um filtro no dashboard
+
+const depois = chartApp.getStats().totalLinhas
+console.log('Linhas depois:', depois)
+console.log('Filtros aplicados?', antes !== depois)
 ```
 
 ## Personalização
@@ -241,10 +276,15 @@ Para mudar as métricas ou adicionar novos eixos, edite `prepareChartData()` em 
    - Verifique índices no banco de dados
    - Considere cache no backend
 
-### Filtros não funcionam
-1. Execute `chartApp.getFilters()` para ver filtros ativos
-2. Verifique se os nomes dos filtros correspondem ao mapeamento
-3. Use `chartApp.stopMonitoring()` e `chartApp.refresh()` para recarregar
+### Filtros não funcionam (v1.1)
+1. **Verifique o contador de linhas**: Deve mudar quando aplica filtros
+2. Execute `chartApp.debugFilters()` para ver estado dos filtros
+3. Use `chartApp.forceReloadWithFilters()` para forçar recaptura
+4. Compare número de linhas antes/depois de aplicar filtros
+5. Se o número não muda, verifique:
+   - A query tem placeholders de filtros (`[[AND {{data}}]]`)
+   - Os nomes dos filtros correspondem ao mapeamento
+   - A URL do iframe contém os parâmetros de filtro
 
 ### Dados aparecem no console mas gráfico fica vazio
 1. Verifique o mapeamento de colunas em config.js
@@ -257,15 +297,21 @@ Para mudar as métricas ou adicionar novos eixos, edite `prepareChartData()` em 
 2. Adicione filtro de data para limitar período
 3. Considere aumentar `batchSize` em data-transformer.js
 
+### Contador de linhas não aparece (v1.1)
+1. Verifique se o elemento existe: `document.getElementById('total-linhas')`
+2. Confirme que tem a versão mais recente do HTML
+3. Limpe o cache do navegador: Ctrl+Shift+R
+4. Execute `chartApp.elements.totalLinhas` no console
+
 ## Estrutura de Arquivos
 
 ```
 grafico_combo/
-├── index.html              # HTML principal
+├── index.html              # HTML principal (v1.1: com contador)
 ├── css/
 │   └── grafico.css        # Estilos específicos + altura fixa
 ├── js/
-│   ├── main_grafico_combo.js # Controlador principal
+│   ├── main_grafico_combo.js # Controlador principal (v1.1: debug aprimorado)
 │   ├── config.js          # Configurações e mapeamentos
 │   ├── chart-builder.js   # Construtor do gráfico Highcharts
 │   └── data-transformer.js # Transformação e agregação de dados
@@ -305,12 +351,33 @@ O componente captura automaticamente todos os filtros aplicados no dashboard:
 2. Monitora mudanças nos filtros
 3. Aplica debounce de 500ms
 4. Recarrega dados automaticamente
+5. **Atualiza contador de linhas** (v1.1)
 
 ### Múltiplos Componentes
 É possível ter vários gráficos no mesmo dashboard:
 - Cada um com seu próprio `question_id`
 - Filtros são aplicados em todos simultaneamente
 - Performance otimizada para múltiplas instâncias
+- Contadores individuais por componente
+
+## Novidades v1.1
+
+### Contador de Linhas
+- Exibe total de linhas processadas no cabeçalho
+- Formato: "X linhas | Y contas | Período | Atualização"
+- Permite verificar visualmente se filtros estão funcionando
+- Atualiza automaticamente quando filtros mudam
+
+### Debug de Filtros Aprimorado
+- `chartApp.debugFilters()`: Mostra estado completo dos filtros
+- `chartApp.forceReloadWithFilters()`: Força recaptura e recarga
+- Logs mais detalhados no console
+- Diagnóstico visual através do contador
+
+### Melhorias de Usabilidade
+- Feedback imediato do impacto dos filtros
+- Formatação de números com separadores de milhares
+- Comandos de debug mais intuitivos
 
 ## Próximas Melhorias
 
@@ -321,6 +388,8 @@ O componente captura automaticamente todos os filtros aplicados no dashboard:
 - [ ] Cache local de dados agregados
 - [ ] Exportação de imagem em alta resolução
 - [ ] Animações de transição entre dados
+- [x] Contador de linhas processadas (v1.1)
+- [x] Debug aprimorado de filtros (v1.1)
 
 ## Teste Local
 
@@ -354,7 +423,8 @@ firefox "http://localhost:8000/index.html?question_id=51"
       ["2024-01-02", "Conta A", 1500, 75, 150.00],
       // ...
     ]
-  }
+  },
+  row_count: 41285  // v1.1: Total de linhas retornadas
 }
 ```
 
@@ -400,7 +470,7 @@ firefox "http://localhost:8000/index.html?question_id=51"
 
 ## Versão e Suporte
 
-- **Versão**: 1.0.0
+- **Versão**: 1.1.0
 - **Última Atualização**: 29/07/2025
 - **Compatibilidade**: Metabase 0.48+
 - **Navegadores**: Chrome, Firefox, Safari, Edge
@@ -416,6 +486,14 @@ Para contribuir com melhorias:
 5. Otimize para performance com grandes volumes
 
 ## Changelog
+
+### v1.1.0 (29/07/2025)
+- Adicionado contador de linhas no cabeçalho
+- Debug aprimorado de filtros
+- Novos comandos: `debugFilters()` e `forceReloadWithFilters()`
+- Formatação de números com separadores
+- Logs mais detalhados para diagnóstico
+- Verificação visual do impacto de filtros
 
 ### v1.0.0 (29/07/2025)
 - Lançamento inicial

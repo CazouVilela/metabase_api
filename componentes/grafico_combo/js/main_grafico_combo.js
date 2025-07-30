@@ -45,6 +45,7 @@ class ChartApp {
         // Elementos DOM
         this.elements = {
             loading: document.getElementById('loading'),
+            totalLinhas: document.getElementById('total-linhas'),
             totalContas: document.getElementById('total-contas'),
             periodoDados: document.getElementById('periodo-dados'),
             ultimaAtualizacao: document.getElementById('ultima-atualizacao'),
@@ -74,6 +75,21 @@ class ChartApp {
             },
             exportData: () => this.exportData(),
             debugData: () => this.debugData(),
+            debugFilters: () => {
+                console.log('=== DEBUG DE FILTROS ===');
+                console.log('URL atual:', window.location.href);
+                console.log('Filtros capturados:', this.filterManager.currentFilters);
+                console.log('Total de filtros:', Object.keys(this.filterManager.currentFilters || {}).length);
+                console.log('FilterManager está monitorando?', this.filterManager.isMonitoring);
+                console.log('=======================');
+                return this.filterManager.currentFilters;
+            },
+            forceReloadWithFilters: async () => {
+                console.log('[ChartApp] Forçando recaptura de filtros...');
+                await this.filterManager.captureCurrentFilters();
+                console.log('[ChartApp] Filtros recapturados:', this.filterManager.currentFilters);
+                return this.loadData('force_reload');
+            },
             fixHeight: () => {
                 // Comando para forçar altura fixa se necessário
                 const container = document.getElementById('chart-container');
@@ -81,8 +97,8 @@ class ChartApp {
                     container.style.height = '450px';
                     container.style.overflow = 'hidden';
                 }
-                if (this.chart) {
-                    this.chart.setSize(null, 450, false);
+                if (this.chartBuilder.chart) {
+                    this.chartBuilder.chart.setSize(null, 450, false);
                 }
                 console.log('[ChartApp] Altura fixada em 450px');
             }
@@ -267,6 +283,18 @@ class ChartApp {
             };
 
             console.log('[ChartApp] Parâmetros da requisição:', params);
+            console.log('[ChartApp] Filtros capturados:', Object.keys(filters).length, filters);
+            
+            // Debug detalhado dos filtros
+            if (Object.keys(filters).length > 0) {
+                console.log('[ChartApp] === FILTROS ATIVOS ===');
+                Object.entries(filters).forEach(([key, value]) => {
+                    console.log(`[ChartApp] ${key}: ${value}`);
+                });
+                console.log('[ChartApp] ====================');
+            } else {
+                console.warn('[ChartApp] ATENÇÃO: Nenhum filtro capturado!');
+            }
 
             // Buscar dados
             const startTime = Date.now();
@@ -300,13 +328,18 @@ class ChartApp {
 
             console.log(`[ChartApp] Dados recebidos em ${loadTime}ms:`, {
                 rows: response.data?.rows?.length || 0,
-                cols: response.data?.cols?.length || 0
+                cols: response.data?.cols?.length || 0,
+                fromCache: response.from_cache || false,
+                totalLinhas: response.row_count || response.data?.rows?.length || 0
             });
 
             // Validar resposta
             if (!response || !response.data || !response.data.rows) {
                 throw new Error('Resposta inválida da API');
             }
+
+            // Armazenar total de linhas
+            const totalRows = response.row_count || response.data?.rows?.length || 0;
 
             // Transformar dados com medição de tempo
             const transformStartTime = Date.now();
@@ -318,6 +351,7 @@ class ChartApp {
             this.currentData = {
                 raw: response,
                 transformed: chartData,
+                totalRows: totalRows,
                 loadTime: loadTime,
                 timestamp: new Date()
             };
@@ -355,6 +389,13 @@ class ChartApp {
      */
     updateUI(chartData) {
         const { stats } = chartData;
+        
+        // Total de linhas processadas
+        if (this.elements.totalLinhas && this.currentData) {
+            const totalRows = this.currentData.totalRows || 0;
+            this.elements.totalLinhas.textContent = 
+                `${this.formatNumber(totalRows)} ${totalRows === 1 ? 'linha' : 'linhas'}`;
+        }
         
         // Total de contas
         if (this.elements.totalContas) {
@@ -516,10 +557,12 @@ class ChartApp {
         return {
             questionId: this.questionId,
             dadosCarregados: !!this.currentData,
-            totalLinhas: this.currentData?.raw?.data?.rows?.length || 0,
+            totalLinhas: this.currentData?.totalRows || 0,
+            totalLinhasRaw: this.currentData?.raw?.data?.rows?.length || 0,
             totalMeses: this.currentData?.transformed?.categories?.length || 0,
             totalContas: this.currentData?.transformed?.stats?.totalAccounts || 0,
             filtrosAtivos: Object.keys(this.filterManager.currentFilters || {}).length,
+            filtros: this.filterManager.currentFilters || {},
             tempoCarregamento: this.currentData?.loadTime || 0,
             ultimaAtualizacao: this.currentData?.timestamp || null
         };
