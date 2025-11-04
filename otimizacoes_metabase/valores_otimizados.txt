@@ -1,0 +1,86 @@
+═══════════════════════════════════════════════════════════════
+VALORES OTIMIZADOS - METABASE
+Data: 01/11/2025
+Sistema: Fedora 43 - 125GB RAM, 16 cores
+═══════════════════════════════════════════════════════════════
+
+JVM HEAP
+────────────────────────────────────────────────────────────────
+JAVA_OPTS: "-Xms8G -Xmx24G -XX:+UseG1GC -XX:MaxGCPauseMillis=500 -XX:+UseStringDeduplication -XX:ParallelGCThreads=10"
+
+Valores individuais:
+  Xms                      : 8G
+  Xmx                      : 24G
+  UseG1GC                  : true
+  MaxGCPauseMillis         : 500
+  UseStringDeduplication   : true
+  ParallelGCThreads        : 10
+
+
+QUERY SETTINGS
+────────────────────────────────────────────────────────────────
+MB_UNAGGREGATED_QUERY_ROW_LIMIT : 20000000
+MB_QUERY_TIMEOUT_SECONDS        : 1800
+MB_QUERY_CACHING_ENABLED        : true
+MB_QUERY_CACHING_TTL_RATIO      : 100
+
+
+WEB SERVER (JETTY)
+────────────────────────────────────────────────────────────────
+MB_JETTY_THREADS               : 100
+MB_JETTY_MAX_QUEUED_REQUESTS   : 2000
+
+
+DATABASE CONNECTION
+────────────────────────────────────────────────────────────────
+MB_APPLICATION_DB_MAX_CONNECTION_POOL_SIZE : 50
+
+MB_DB_TYPE  : postgres
+MB_DB_DBNAME: metabase
+MB_DB_PORT  : 5432
+MB_DB_USER  : metabase_user
+MB_DB_PASS  : ${METABASE_PASSWORD}
+MB_DB_HOST  : host.docker.internal
+
+
+RECURSOS DOCKER
+────────────────────────────────────────────────────────────────
+mem_limit       : 64g
+mem_reservation : 16g
+cpus            : 10.0
+
+
+OUTRAS CONFIGURAÇÕES
+────────────────────────────────────────────────────────────────
+restart     : always
+env_file    : ../.env
+ports       : 3000:3000
+extra_hosts : host.docker.internal:host-gateway
+
+
+═══════════════════════════════════════════════════════════════
+COMANDOS ÚTEIS
+═══════════════════════════════════════════════════════════════
+
+Reiniciar container:
+  cd /home/cazouvilela/projetos/metabase/config/docker
+  docker compose restart
+
+Recriar container:
+  docker compose down
+  docker compose up -d
+
+Ver logs:
+  docker logs metabase -f
+
+Verificar recursos:
+  docker stats metabase
+  docker inspect metabase | grep -A 5 Memory
+
+Testar conexão PostgreSQL:
+  docker exec metabase nc -zv host.docker.internal 5432
+
+Verificar JVM:
+  docker exec metabase ps aux | grep java
+
+═══════════════════════════════════════════════════════════════

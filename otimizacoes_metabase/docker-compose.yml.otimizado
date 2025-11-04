@@ -48,13 +48,6 @@ services:
       MB_DB_PASS: "${METABASE_PASSWORD}"
       MB_DB_HOST: "host.docker.internal"
 
-      # ═══════════════════════════════════════════════════════════════
-      # REDIS / VALKEY - CACHE EXTERNO
-      # ═══════════════════════════════════════════════════════════════
-      REDIS_ENABLED: "true"
-      REDIS_HOST: "172.17.0.1"
-      REDIS_PORT: "6379"
-
     restart: always
 
     # ═══════════════════════════════════════════════════════════════
