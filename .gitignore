@@ -26,3 +26,6 @@ backup/
 config/nginx/*.pp
 config/nginx/*.te
 data/
+
+# Terminal logs (real-time session logs)
+terminal_logs/
