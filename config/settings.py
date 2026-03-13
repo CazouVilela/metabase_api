@@ -3,18 +3,15 @@ Configurações centralizadas do projeto
 Carrega variáveis de ambiente e define defaults
 """
 
-from dotenv import load_dotenv
-
-# Carrega arquivo .env
 import os
 from pathlib import Path
 
-# Carrega .env da raiz do projeto ou de config/
-env_path = Path(__file__).parent.parent / '.env'
-if not env_path.exists():
-    env_path = Path(__file__).parent / '.env'
-    
-load_dotenv(env_path)
+# Carrega config/.env via loader isolado por branch
+import importlib.util
+_loader_path = Path(__file__).parent / 'env.config.py'
+_spec = importlib.util.spec_from_file_location('env_config', _loader_path)
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
 
 # Metabase Configuration
 METABASE_CONFIG = {
