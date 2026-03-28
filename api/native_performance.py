@@ -4,6 +4,10 @@ API com performance EXATA do Metabase nativo
 Sem chunks, sem streaming - tudo otimizado como o Metabase faz
 """
 
+import os
+from dotenv import load_dotenv
+load_dotenv('/home/cazouvilela/credenciais/database/postgres_main.env')
+
 import psycopg2
 import psycopg2.extras
 import json
@@ -51,11 +55,11 @@ class NativePerformanceAPI:
         for i in range(5):  # Começa com 5 conexões
             try:
                 conn = psycopg2.connect(
-                    host='localhost',
-                    port=5432,
-                    database='agencias',
-                    user='cazouvilela',
-                    password='$Riprip001',
+                    host=os.getenv('DB_HOST', 'localhost'),
+                    port=int(os.getenv('DB_PORT', '15432')),
+                    database=os.getenv('DB_NAME', 'agencias'),
+                    user=os.getenv('DB_USER', 'cazouvilela'),
+                    password=os.getenv('POSTGRES_PASSWORD'),
                     # Otimizações de conexão
                     options='-c statement_timeout=600000 -c work_mem=256MB',
                     connect_timeout=5
@@ -85,11 +89,11 @@ class NativePerformanceAPI:
             # Se não tem no pool, cria nova
             if not conn:
                 conn = psycopg2.connect(
-                    host='localhost',
-                    port=5432,
-                    database='agencias',
-                    user='cazouvilela',
-                    password='$Riprip001',
+                    host=os.getenv('DB_HOST', 'localhost'),
+                    port=int(os.getenv('DB_PORT', '15432')),
+                    database=os.getenv('DB_NAME', 'agencias'),
+                    user=os.getenv('DB_USER', 'cazouvilela'),
+                    password=os.getenv('POSTGRES_PASSWORD'),
                     options='-c statement_timeout=600000 -c work_mem=256MB'
                 )
                 conn.set_session(autocommit=True)

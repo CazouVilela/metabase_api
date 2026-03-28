@@ -3,11 +3,14 @@
 Cliente para conexão direta ao PostgreSQL
 """
 
+import os
 import psycopg2
 import psycopg2.extras
 from typing import List, Dict, Any, Optional, Generator
 from contextlib import contextmanager
 import time
+from dotenv import load_dotenv
+load_dotenv('/home/cazouvilela/credenciais/database/postgres_main.env')
 import json
 from decimal import Decimal
 
@@ -16,11 +19,11 @@ class PostgresClient:
     
     def __init__(self):
         self.connection_params = {
-            'host': 'localhost',
-            'port': 5432,
-            'database': 'agencias',
-            'user': 'cazouvilela',
-            'password': '$Riprip001'
+            'host': os.getenv('DB_HOST', 'localhost'),
+            'port': int(os.getenv('DB_PORT', '15432')),
+            'database': os.getenv('DB_NAME', 'agencias'),
+            'user': os.getenv('DB_USER', 'cazouvilela'),
+            'password': os.getenv('POSTGRES_PASSWORD', '')
         }
         self._connection_pool = []
         self.max_pool_size = 5
